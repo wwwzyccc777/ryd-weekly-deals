@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {normalize,STORES,assess,num,dateISO} from '../worker/index.js';
+const product=(overrides={})=>({results:[{name:'Jasminris',manufacturer:'ELDORADO',priceNoUnit:'42,90',displayVolume:'2kg',potentialPromotions:[{code:'test',name:'Jasminris',price:37.9,qualifyingCount:1,comparePrice:'18:95 kr/kg',startDate:'05/10-2026',endDate:'11/10-2026',rewardLabel:'37,90/st',savePrice:'Spara 5,00 kr',...overrides}]}]});
+assert.equal(num('18:95 kr/kg'),18.95);assert.equal(dateISO('11/10-2026'),'2026-10-11');
+const rice=normalize(product(),STORES[1])[0];assert.equal(rice.price,37.9);assert.equal(rice.comparisonValue,18.95);assert.ok(assess({...rice,active:true}).recommended);
+const bundle=normalize(product({price:79,qualifyingCount:2,comparePrice:'2:08 kr/tvätt',savePrice:'Spara 10,80 kr'}),STORES[1])[0];assert.equal(bundle.unitPrice,39.5);assert.equal(bundle.discount,12);
+const kg=normalize(product({price:null,qualifyingCount:null,rewardLabel:'89/kg',cartLabel:'89 kr/kg',comparePrice:'89,00/kg'}),STORES[0])[0];assert.equal(kg.price,89);assert.ok(kg.perKg);
+const threshold=normalize(product({price:null,rewardLabel:'89/st',cartLabel:'Handla för 300 kr 89/st',conditionLabel:'Handla för 300 kr'}),STORES[1])[0];assert.ok(threshold.threshold);assert.equal(assess({...threshold,active:true}).score,0);
+const range=normalize(product({comparePrice:'18:95-29:00 kr/kg'}),STORES[1])[0];assert.equal(range.comparisonValue,null);assert.equal(assess({...range,active:true}).score,0);
+assert.equal(assess({...rice,active:false}).recommended,false);
+const member=normalize(product({campaignType:'LOYALTY'}),STORES[1])[0];assert.ok(member.member);
+console.log('7 price, bundle, threshold, range, expiry and membership checks passed.');

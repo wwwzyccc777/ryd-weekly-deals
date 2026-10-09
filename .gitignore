@@ -1,0 +1,14 @@
+dist/
+worker/
+work/
+outputs/
+node_modules/
+.env
+.env.*
+*.dpapi
+*.pem
+.local/
+.wrangler/
+site.tar.gz
+.DS_Store
+Thumbs.db

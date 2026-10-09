@@ -1,0 +1,14 @@
+{
+  "name": "ryd-weekly-deals",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-10-09",
+  "build": {
+    "command": "npm run build"
+  },
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "ryd-weekly-deals"
+    }
+  ]
+}
