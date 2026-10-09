@@ -29,7 +29,7 @@ cd ryd-weekly-deals
 npm run dev
 ```
 
-打开 **http://127.0.0.1:8787**。没有第三方 npm 依赖，无需 `npm install`。本地模式直接采集，使用内存缓存；官网不可访问时显示标记失败的历史快照。公开在线网站使用 R2 持久保存，二者不同。
+打开 [http://127.0.0.1:8787](http://127.0.0.1:8787)。没有第三方 npm 依赖，无需 `npm install`。本地模式直接采集，使用内存缓存；官网不可访问时显示标记失败的历史快照。公开在线网站使用 R2 持久保存，二者不同。
 
 ```bash
 npm run build  # 由 src/ 和 data/ 生成 worker/index.js 及 dist/
