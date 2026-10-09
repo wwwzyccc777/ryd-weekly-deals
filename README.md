@@ -73,4 +73,4 @@ The global sync cooldown is 10 minutes. Failed requests retain previous data. Ne
 
 代码和作者整理的翻译词库使用 [MIT](LICENSE)。商家图片、商标和原始优惠信息保留各自权利；本项目不隶属于 Hemköp 或 Willys。
 
-Code and authored translations are MIT licensed. Retailer images, trademarks and original promotion content retain their respective rights. Not affiliated with Hemköp or Willys.
+Code and authored translations are MIT licensed. Retailer images, trademarks and original promotion content retain their respective rights; see [NOTICE](NOTICE). Not affiliated with Hemköp or Willys.
