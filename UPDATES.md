@@ -16,4 +16,4 @@ The optional local backup script signs imports with ECDSA P-256. Private keys re
 
 自行部署需创建自己的 Worker 和 R2 BUCKET；若启用备用上传，先生成自己的密钥并部署新公钥。正常云端按钮更新无须另装本机后台程序。
 
-ICA、Lidl 与原有门店一起同步商品优惠。City Gross Tornby 同步宣传册链接和价格有效期，商品价格暂未解析；不要把宣传册发布日期当作优惠开始日期。所有来源共用全站 10 分钟冷却。
+ICA、Lidl 与原有门店一起同步商品优惠。City Gross Tornby 下载公开宣传册 PDF，解析商品、价格和条件并保留页码；不要把宣传册发布日期当作优惠开始日期。所有来源共用全站 10 分钟冷却。

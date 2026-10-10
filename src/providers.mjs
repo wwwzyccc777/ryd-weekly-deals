@@ -1,3 +1,4 @@
+import {cityPDFPages,cityPageProducts} from './city-leaflet.mjs';
 // Public retailer data only. Never evaluate scripts received from a retailer.
 const SOURCE_HEADERS={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36','Accept-Language':'sv-SE,sv;q=0.9,en;q=0.8'};
 async function sourceText(url,headers={}){const r=await fetch(url,{headers:{...SOURCE_HEADERS,...headers},signal:AbortSignal.timeout(25000)});if(!r.ok)throw Error('官方来源返回 HTTP '+r.status);return r.text();}
@@ -43,20 +44,61 @@ export function adaptLidl(products,store){
 }
 export function parseFlyerDates(text,year){const m=String(text||'').match(/(\d{1,2})\/(\d{1,2})\s*(?:till|[-–])\s*(\d{1,2})\/(\d{1,2})/);if(!m)return {start:null,end:null};const start=`${year}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`,end=`${Number(year)+(Number(m[4])<Number(m[2])?1:0)}-${m[4].padStart(2,'0')}-${m[3].padStart(2,'0')}`;return {start,end};}
 export function adaptCityFlyers(flyers,store){if(!Array.isArray(flyers)||!flyers.length)throw Error('City Gross 尚未返回宣传册');return {results:flyers.filter(x=>String(x.store)==='3231'&&/^https:\/\/online\.flippingbook\.com\/view\/\d+\/?$/.test(x.link)).map(x=>{const {start,end}=parseFlyerDates(x.subTitle,String(x.availableFrom).slice(0,4));return mapped(x.title,'City Gross','','', {code:'flyer-'+x.id+'-'+start,price:null,priceUnknown:true,qualifyingCount:1,startDate:start,endDate:end,kind:'flyer',productURL:x.link,providerCategory:'其他',flyerTitle:x.title,description:'商品价格尚未解析；请查看门店官方宣传册。',descriptionZh:'商品价格尚未解析；请查看门店官方宣传册。',descriptionEn:'Product prices are not parsed. Open the official store leaflet.'});})};}
+async function fetchCityBook(flyer,store){
+ const {start,end}=parseFlyerDates(flyer.subTitle,String(flyer.availableFrom).slice(0,4));
+ const html=await sourceText(flyer.link);
+ const root=html.match(/PrivateContentRoot:\s*'([^']+)'/)?.[1];
+ const match=html.match(/(?:var|let|const) initialPolicies\s*=\s*([\s\S]*?);/);
+ if(!root||!match||!/^https:\/\/d[\w]+\.cloudfront\.net\/[\w/-]+\/$/.test(root))throw Error('宣传册公开下载格式已变化');
+ const policies=JSON.parse(match[1]);const url=root+'common/downloads/publication.pdf';
+ const policy=policies.find(p=>url.replace(/^https?/,'').startsWith(p.PathPrefix));
+ if(!policy)throw Error('宣传册公开下载链接不可用');
+ // Read policies supplied to every anonymous visitor by the official publisher.
+ // They expire and are never saved in the public dataset or source archive.
+ const r=await fetch(url+'?'+new URLSearchParams({Policy:policy.Policy,Signature:policy.Signature,'Key-Pair-Id':policy.KeyId}),{headers:SOURCE_HEADERS,signal:AbortSignal.timeout(30000)});
+ if(!r.ok)throw Error('宣传册下载 HTTP '+r.status);const bytes=new Uint8Array(await r.arrayBuffer());
+ if(bytes.length>20000000||!new TextDecoder().decode(bytes.slice(0,5)).startsWith('%PDF'))throw Error('宣传册 PDF 格式异常');
+ const pages=await cityPDFPages(bytes),offers=cityPageProducts(pages);
+ if(offers.length<10)throw Error('宣传册商品解析不足，保留上次结果');
+ const results=offers.map(x=>{
+  let offerStart=start,offerEnd=end;
+  const offset=(n)=>{const d=new Date(start+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
+  if(/från tisdag/i.test(x.description))offerStart=offset(1);
+  if(/gäller torsdag\s*[-–]\s*fredag/i.test(x.description)){offerStart=offset(3);offerEnd=offset(4);}
+  const hg=x.unit==='/hg',price=x.price===null?null:hg?Math.round(x.price*1000)/100:x.price;
+  let compare=x.description.match(/Jfr\.\s*pris\s+(.+?)(?:\.\s|$)/i)?.[1]||(/\/(kg|hg)/.test(x.unit)?`${price} kr/kg`:'');
+  const size=x.description.match(/(?:Ca\s+)?\d+(?:[,.]\d+)?(?:\s*[-–]\s*\d+(?:[,.]\d+)?)?\s*(?:kg|g|ml|cl|lit|pack)\b/i)?.[0]||'';
+  const exactSize=size.match(/^(\d+(?:[,.]\d+)?)\s*(kg|g|ml|cl|lit)$/i);
+  if(!compare&&price!==null&&exactSize&&!/\/(kg|hg)/.test(x.unit)){
+   const u=exactSize[2].toLowerCase(),volume=Number(exactSize[1].replace(',','.'))/({kg:1,g:1000,lit:1,ml:1000,cl:100}[u]);
+   compare=`${(price/x.quantity/volume).toFixed(2)} kr/${/^(kg|g)$/.test(u)?'kg':'l'}`;
+  }
+  const limit=x.description.match(/Max\s+(\d+)\s*([^.]*)/i);
+  const code=[flyer.link.match(/\/view\/(\d+)/)[1],x.name,x.description,x.price,x.quantity,x.member,offerStart,offerEnd].join('|');
+  return mapped(x.name,'',size,x.description,{code,price,priceUnknown:price===null,qualifyingCount:x.quantity,rewardLabel:x.percent!==null?`${x.percent}% rabatt`:`${price} kr${/\/(kg|hg)/.test(x.unit)?'/kg':x.quantity>1?' för '+x.quantity:'/st'}`,comparePrice:compare.replace(/\/lit\b/g,'/l'),startDate:offerStart,endDate:offerEnd,campaignType:x.member?'LOYALTY':'PUBLIC',redeemLimit:limit?Number(limit[1]):null,redeemLimitLabel:limit?.[0]||'',productURL:flyer.link+x.page+'/',leafletPage:x.page,originalPriceLabel:hg?`${x.price} kr/hg`:'',providerCategory:/buffé|Bamse|Byggsats|Halloween|ljus|skål|hink|form|jacka|leggings|Cozy/.test(x.name)?'其他':null});
+ });
+ const unique=[...new Map(results.map(x=>[x.potentialPromotions[0].code,x])).values()];
+ return {results:unique,leaflet:{title:flyer.title,url:flyer.link,start,end,pageCount:pages.length,parsedProducts:unique.length}};
+}
 export async function fetchOfficialRaw(store){
  if(store.provider==='ica')return parseICA(await sourceText(store.url),store);
  if(store.provider==='lidl'){
   const [home,identity]=await Promise.all([sourceText(store.host+'/'),sourceText(store.identityURL)]);
   if(!identity.includes('Järdalavägen 1')||!identity.includes('Linköping'))throw Error('Lidl 门店身份不匹配');
-  const paths=[...new Set([...home.matchAll(/<a\b[^>]*href="(\/c\/[^"?#]+\/a\d+)"[^>]*>([\s\S]*?)<\/a>/g)].filter(m=>{const text=plain(m[2]);const dates=parseFlyerDates(text,new Date().getFullYear());return dates.start&&dates.end&&dates.start<=today()&&today()<=dates.end;}).map(m=>m[1]))];
+  const paths=[...new Set([...home.matchAll(/<a\b[^>]*href="(\/c\/[^"?#]+\/a\d+)"[^>]*>([\s\S]*?)<\/a>/g)].filter(m=>{const text=plain(m[2]);const dates=parseFlyerDates(text,Number(today().slice(0,4)));if(dates.start&&dates.end)return dates.start<=today()&&today()<=dates.end;const from=text.match(/Från\s*(\d{1,2})\/(\d{1,2})/i);if(!from)return false;const start=`${today().slice(0,4)}-${from[2].padStart(2,'0')}-${from[1].padStart(2,'0')}`;return start<=today()&&new Date(today())-new Date(start)<7*86400000;}).map(m=>m[1]))];
   if(!paths.length||paths.length>16)throw Error('Lidl 活动列表缺失或格式已变化');
-  const pages=await Promise.all(paths.map(path=>sourceText(store.host+path)));return adaptLidl(pages.flatMap(parseLidl),store);
+  const pages=await Promise.all(paths.map(path=>sourceText(store.host+path)));return {...adaptLidl(pages.flatMap(parseLidl),store),leaflets:[{title:'Lidl reklamblad',url:store.host+'/c/reklamblad/s10018018'}],sourcePages:paths.length};
  }
  if(store.provider==='citygross'){
   const stores=await sourceJSON(store.host+'/api/v1/PageData/stores');const identity=stores.find(x=>x.data?.siteId===168)?.data;
   if(identity?.storeName!=='Linköping Tornby'||identity.id!==9097)throw Error('City Gross 门店身份不匹配');
   const number=await sourceJSON(store.host+'/api/v1/sites/168/storeNumber');if(number.storeNumber!==3231)throw Error('City Gross 店号已变化');
-  return adaptCityFlyers(await sourceJSON(store.host+'/api/v1/leaflets?store=3231'),store);
+  const flyers=(await sourceJSON(store.host+'/api/v1/leaflets?store=3231')).filter(x=>String(x.store)==='3231'&&/^https:\/\/online\.flippingbook\.com\/view\/\d+\/?$/.test(x.link));
+  const leaflets=flyers.map(x=>({...parseFlyerDates(x.subTitle,String(x.availableFrom).slice(0,4)),title:x.title,url:x.link}));
+  const current=flyers.filter(x=>{const d=parseFlyerDates(x.subTitle,String(x.availableFrom).slice(0,4));return d.start&&d.start<=today()&&d.end>=today();});
+  if(!current.length)throw Error('City Gross 没有当前有效的宣传册');
+  const books=await Promise.all(current.map(x=>fetchCityBook(x,store)));
+  return {results:books.flatMap(x=>x.results),leaflets:leaflets.map(x=>({...x,...books.find(b=>b.leaflet.url===x.url)?.leaflet}))};
  }
  const identity=await getJSON(store.host+'/axfood/rest/store/'+store.id);if(identity.name!==store.officialName||String(identity.storeId)!==store.id)throw Error('门店身份验证失败');
  let all=[],page=0,totalPages=1;

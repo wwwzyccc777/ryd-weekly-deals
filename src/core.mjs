@@ -4,7 +4,7 @@ export const STORES = [
  {id:'2178',key:'skag',name:'Willys Skäggetorp',officialName:'Willys Linköping Skäggetorp',host:'https://www.willys.se',url:'https://www.willys.se/erbjudanden/butik?StoreID=2178',address:'Skäggetorps Centrum'},
  {id:'1003823',key:'ica',provider:'ica',name:'ICA Maxi Linköping',officialName:'Maxi ICA Stormarknad Linköping',host:'https://www.ica.se',url:'https://www.ica.se/erbjudanden/maxi-ica-stormarknad-linkoping-1003823/',address:'Västra Svedengatan 12',scopeZh:'门店公开优惠；官网只提供截止日期时不推断开始日期',scopeEn:'Public store offers; missing start dates are not inferred'},
  {id:'lidl-linkoping',key:'lidl',provider:'lidl',name:'Lidl Linköping',officialName:'Lidl Linköping · Järdalavägen 1',host:'https://www.lidl.se',url:'https://www.lidl.se/',identityURL:'https://www.lidl.se/s/sv-SE/butiker/linkoeping/jaerdalavaegen-1/',address:'Järdalavägen 1',scopeZh:'官网全国同价活动；不含地区差异报价和个人券',scopeEn:'Official offers with identical prices across Sweden; regional differences and personal coupons excluded'},
- {id:'citygross-3231',key:'citygross',provider:'citygross',name:'City Gross Tornby',officialName:'City Gross Linköping Tornby',host:'https://www.citygross.se',url:'https://www.citygross.se/butiker/linkoping-tornby',address:'Norra Svedengatan 9',flyerOnly:true,scopeZh:'官方宣传册；商品价格暂未解析，不纳入比价推荐',scopeEn:'Official leaflets; product prices are not parsed or used in recommendations'}
+ {id:'citygross-3231',key:'citygross',provider:'citygross',name:'City Gross Tornby',officialName:'City Gross Linköping Tornby',host:'https://www.citygross.se',url:'https://www.citygross.se/butiker/linkoping-tornby',address:'Norra Svedengatan 9',scopeZh:'从门店官方宣传册解析商品，保留页码；部分餐饮广告不属于打折促销',scopeEn:'Products parsed from the official store leaflet with page references; catering adverts may not be discounted'}
 ];
 export const num = s => {const m=String(s??'').replace(/(\d):(\d)/g,'$1.$2').replace(/,/g,'.').match(/\d+(?:\.\d+)?/);return m?Number(m[0]):null;};
 export function dateISO(s){if(/^\d{4}-\d{2}-\d{2}/.test(String(s||'')))return String(s).slice(0,10);const m=String(s||'').match(/(\d{2})\/(\d{2})-(\d{4})/);return m?`${m[3]}-${m[2]}-${m[1]}`:null;}
@@ -14,8 +14,8 @@ function category(name,cat=''){
  if(/hund|katt|djur/.test(t))return '宠物';
  if(/schampo|tvätt|sköljmedel|disk|tand|deo|dusch|handtvål|hygien|rengör|blöj|rak|hår|serum|ansikt|munskölj|make-up|micellar|intim|toalett|hushållspapper|luft|avfall|fryspås|servett|textil|bindor|body lotion/.test(t))return '日用';
  if(/rosor|rosbuk|krysant|socka|ljus/.test(t))return '其他';
- if(/äpp|druv|mango|citron|tomat|rotfrukt|sötpotatis|pumpor|betor|bryssel|champinjon|gurka|passionsfrukt|sallad/.test(t)&&!/passerade|krossade|torkad|must|munk|gelé|ketchup/.test(t))return '蔬果';
- if(/fisk|lax|kyckling|fläsk|nötfär|kött|kalv|fransyska|lamm|lövbiff|bacon|skink|schnitzel|cevap|pork|älg|korv|salame|salami|pancetta|prosciutto|kebab|gyros|stillahavs/.test(t)&&!/sås/.test(t))return '肉鱼';
+ if(/äpp|druv|mango|citron|tomat|rotfrukt|sötpotatis|pumpor|betor|bryssel|champinjon|lök|banan|paprika|brysselkål|gurka|passionsfrukt|sallad/.test(t)&&!/passerade|krossade|torkad|must|munk|gelé|ketchup/.test(t))return '蔬果';
+ if(/fisk|sej|räkor|revben|högrev|oxbringa|lever|falukorv|kamben|lax|kyckling|fläsk|nötfär|kött|kalv|fransyska|lamm|lövbiff|bacon|skink|schnitzel|cevap|pork|älg|korv|salame|salami|pancetta|prosciutto|kebab|gyros|stillahavs/.test(t)&&!/sås/.test(t))return '肉鱼';
  if(/yoghurt|kvarg|grädd|burrata|ost|präst|herrgård|grevé|jarlsberg|appenzeller|brie|milkshake|prote in/.test(t))return '乳品';
  if(/bröd|fralla|kusar|lingongrova|jollekaka|ciabatta|pane|gårdsgoda/.test(t))return '面包';
  if(/chips|glass|choklad|lakrits|tuggummi|smash|stycksak|bilar|skumtomt|biscoff|läsk|dryck|juice|frappé/.test(t))return '零食饮料';
@@ -39,7 +39,7 @@ export function normalize(raw,store){
   const discount=saved!==null&&unitPrice>0&&!threshold?Math.round(saved/(unitPrice+saved)*100):null;
   const member=p.campaignType==='LOYALTY'||/klubbpris|plus|medlem/i.test(p.textLabelGenerated+' '+p.textLabel);
   const start=dateISO(p.startDate),end=dateISO(p.endDate);
-  result.push({id:store.key+':'+p.code,kind:p.kind||'product',currentListing:!!p.currentListing,productCode:p.mainProductCode||null,store:store.key,name,zh:ZH[name]||null,en:EN[name]||null,descriptionEn:EN_DESCRIPTION[description]||p.descriptionEn||null,translation:ZH[name]?'词库':'待翻译',translationEn:EN[name]?'reviewed':'missing',brand:x.manufacturer||(p.brands||[]).join(', '),size:p.weightVolume||x.displayVolume||'',description,descriptionZh,category:p.providerCategory||category(name,x.googleAnalyticsCategory),price,unitPrice,quantity,perKg,uncertain,threshold,reference,discount,savings:rawSave,discountBasis:p.savingsBasis||'stated',compare,basis,comparisonValue,range,member,limit:p.redeemLimit??p.promotionRedeemLimit??null,limitText:p.redeemLimitLabel||'',condition:p.conditionLabel||'',label,start,end,active:!!end&&end>=today()&&(start?start<=today():!!p.currentListing),image:safeImage(x.image?.url),source:store.url,url:p.productURL|| (p.mainProductCode?store.host+'/produkt/'+p.mainProductCode:store.url),deposit:/pant/i.test(compare+' '+label),frozen:/djupfryst|fryst/i.test(name+" "+description),mix:!!p.realMixAndMatch});
+  result.push({id:store.key+':'+p.code,kind:p.kind||'product',leafletPage:p.leafletPage||null,originalPriceLabel:p.originalPriceLabel||'',currentListing:!!p.currentListing,productCode:p.mainProductCode||null,store:store.key,name,zh:ZH[name]||null,en:EN[name]||null,descriptionEn:EN_DESCRIPTION[description]||p.descriptionEn||null,translation:ZH[name]?'词库':'待翻译',translationEn:EN[name]?'reviewed':'missing',brand:x.manufacturer||(p.brands||[]).join(', '),size:p.weightVolume||x.displayVolume||'',description,descriptionZh,category:p.providerCategory||category(name,x.googleAnalyticsCategory),price,unitPrice,quantity,perKg,uncertain,threshold,reference,discount,savings:rawSave,discountBasis:p.savingsBasis||'stated',compare,basis,comparisonValue,range,member,limit:p.redeemLimit??p.promotionRedeemLimit??null,limitText:p.redeemLimitLabel||'',condition:p.conditionLabel||'',label,start,end,active:!!end&&end>=today()&&(start?start<=today():!!p.currentListing),image:safeImage(x.image?.url),source:store.url,url:p.productURL|| (p.mainProductCode?store.host+'/produkt/'+p.mainProductCode:store.url),deposit:/pant/i.test(compare+' '+label),frozen:/djupfryst|fryst/i.test(name+" "+description),mix:!!p.realMixAndMatch});
  }
  return [...new Map(result.map(x=>[x.id,x])).values()];
 }
@@ -98,10 +98,10 @@ async function fetchStore(store,env,force=false){
   const raw=await fetchOfficialRaw(store);if(!raw.results?.length)throw Error('来源没有返回优惠，保留上次结果');
   const knownNames=new Map((old?.items||[]).map(x=>[x.name,x])),knownDescriptions=new Map((old?.items||[]).map(x=>[x.description,x]));
   const items=await translateUnknown(normalize(raw,store).map(x=>{const n=knownNames.get(x.name),d=knownDescriptions.get(x.description);return {...x,zh:x.zh||n?.zh,en:x.en||n?.en,descriptionZh:x.descriptionZh||d?.descriptionZh,descriptionEn:x.descriptionEn||d?.descriptionEn};}));
-  const data={store,items,fetchedAt:new Date().toISOString(),status:'live',error:null};
+  const data={store,items,leaflets:raw.leaflets||[],sourcePages:raw.sourcePages||null,fetchedAt:new Date().toISOString(),status:'live',error:null};
   if(env.BUCKET)await env.BUCKET.put('stores/'+store.id+'.json',JSON.stringify(data),{httpMetadata:{contentType:'application/json'}});
   memory.set(store.id,data);return data;
- }catch(e){return {store,items:old?.items||[],fetchedAt:old?.fetchedAt||null,status:'failed',error:String(e.message||e)};}
+ }catch(e){return {store,items:old?.items||[],leaflets:old?.leaflets||[],sourcePages:old?.sourcePages||null,fetchedAt:old?.fetchedAt||null,status:'failed',error:String(e.message||e)};}
 }
 export async function collect(env={},force=false){
  const stores=await Promise.all(STORES.map(async s=>env.BUCKET?(await previous(s,env)||{store:s,items:[],fetchedAt:null,status:'failed',error:'尚未同步'}):fetchStore(s,env,force)));
@@ -128,7 +128,7 @@ export default {async fetch(request,env={},ctx){
     const stamp=Date.parse(record.fetchedAt);if(!Number.isFinite(stamp)||Math.abs(Date.now()-stamp)>20*60*1000)throw Error('抓取时间不正确');
     const translated=new Map((record.translated||[]).map(x=>[x.id,x]));
     const items=normalize(record.raw,store).map(x=>{const t=translated.get(x.id);return {...x,zh:x.zh||(typeof t?.zh==='string'?t.zh.slice(0,300):null),en:x.en||(typeof t?.en==='string'?t.en.slice(0,300):null),descriptionZh:x.descriptionZh||(typeof t?.descriptionZh==='string'?t.descriptionZh.slice(0,1000):null),descriptionEn:x.descriptionEn||(typeof t?.descriptionEn==='string'?t.descriptionEn.slice(0,1000):null),translation:x.zh?'词库':t?.zh?'机器翻译':'翻译暂不可用',translationEn:x.en?'reviewed':t?.en?'machine':'missing'};});
-    const data={store,items,fetchedAt:record.fetchedAt,status:'live',error:null};
+    const data={store,items,leaflets:record.raw.leaflets||[],sourcePages:record.raw.sourcePages||null,fetchedAt:record.fetchedAt,status:'live',error:null};
     await env.BUCKET.put('stores/'+store.id+'.json',JSON.stringify(data),{httpMetadata:{contentType:'application/json'}});memory.set(store.id,data);
    }
    return Response.json(await collect(env),{headers:{'Cache-Control':'no-store'}});

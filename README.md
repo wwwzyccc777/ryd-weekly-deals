@@ -12,7 +12,7 @@
 
 ## 功能
 
-- 汇总 Hemköp Linköping Ryd（4193）、Willys Linköping Tornby（2298）、Willys Linköping Skäggetorp（2178）的门店官网优惠；新增 Maxi ICA Stormarknad Linköping、Lidl Linköping（Järdalavägen 1）的商品优惠，以及 City Gross Linköping Tornby 的宣传册链接。
+- 汇总 Hemköp Linköping Ryd（4193）、Willys Linköping Tornby（2298）、Willys Linköping Skäggetorp（2178）的门店官网优惠；新增 Maxi ICA Stormarknad Linköping、Lidl Linköping（Järdalavägen 1）的商品优惠，以及 City Gross Linköping Tornby 宣传册内的商品优惠。
 - 公开网页免登录；任何人点击“从官网更新”，云端抓取、翻译并保存，访客共享最新数据。无需维护者电脑开机。
 - 中文、英语与瑞典语原文对照。会员价、凑单、数量、押金、限购及有效日期单独标注。
 - 按官方单价和节省金额给出可解释建议；同款 Willys 优惠合并，购物清单和偏好保存在各自浏览器。
@@ -26,10 +26,11 @@
 ```bash
 git clone https://github.com/wwwzyccc777/ryd-weekly-deals.git
 cd ryd-weekly-deals
+npm ci
 npm run dev
 ```
 
-打开 [http://127.0.0.1:8787](http://127.0.0.1:8787)。没有第三方 npm 依赖，无需 `npm install`。本地模式直接采集，使用内存缓存；官网不可访问时显示标记失败的历史快照。公开在线网站使用 R2 持久保存，二者不同。
+打开 [http://127.0.0.1:8787](http://127.0.0.1:8787)。首次启动请运行 `npm ci` 安装锁定版本的 PDF 解析和构建依赖。本地模式直接采集，使用内存缓存；官网不可访问时显示标记失败的历史快照。公开在线网站使用 R2 持久保存，二者不同。
 
 ```bash
 npm run build  # 由 src/ 和 data/ 生成 worker/index.js 及 dist/
@@ -63,7 +64,7 @@ wrangler.jsonc       自行部署到 Cloudflare 的配置示例
 
 A bilingual grocery-deals website for six stores in Linköping, Sweden. Visitors can sync official offers in the cloud without an account or the maintainer's computer. It includes Chinese / English translations, Swedish originals, clear membership and purchase conditions, official images, shopping lists, and explainable unit-price recommendations.
 
-**Run locally:** install Node.js 24+, clone or unzip, run `npm run dev`, then open http://127.0.0.1:8787. There are no npm dependencies. Local data is held in memory; dated snapshots are labelled when collection fails. For hosting, use your own Worker / Site with an R2 binding named `BUCKET`; see [deployment instructions](docs/DEPLOYMENT.md). Static GitHub Pages alone cannot run the collector.
+**Run locally:** install Node.js 24+, clone or unzip, run `npm ci` followed by `npm run dev`, then open http://127.0.0.1:8787. The lockfile pins the PDF parser and build dependencies. Local data is held in memory; dated snapshots are labelled when collection fails. For hosting, use your own Worker / Site with an R2 binding named `BUCKET`; see [deployment instructions](docs/DEPLOYMENT.md). Static GitHub Pages alone cannot run the collector.
 
 **Develop:** `npm run build`, `npm test`, `npm run validate`. Python 3 is optional for `python scripts/package-source.py`, which prepares the website's source download. The build then embeds that archive.
 
@@ -79,8 +80,14 @@ Code and authored translations are MIT licensed. Retailer images, trademarks and
 
 - **ICA Maxi Linköping**：核实门店 1003823 / 8900；标注 ICA Stammis 会员价。官网没有开始日期时，仅展示“官网当前列出”与截止日期。没有明确金额的百分比或买二付一活动不自动计算价格。
 - **Lidl Linköping**：核实 Järdalavägen 1；采集官网各区域同价且当前有效的活动，标注 Lidl Plus 价，不推断地区不同价或个人券。
-- **City Gross Tornby**：核实 168 / 3231；同步官方宣传册与价格有效期。商品接口未返回商品数据，宣传册暂未逐项解析，不参与商品比价和推荐。
+- **City Gross Tornby**：核实 168 / 3231；自动下载门店宣传册的公开 PDF，按文字位置解析商品、价格、组合价、会员条件和页码；过滤被新版画面遮住的旧排版。保留完整宣传册入口。每百克报价统一换算为每公斤；百分比折扣不会当作商品售价。
 
-All six sources use the public cloud sync button. ICA and Lidl supply product offers; City Gross currently supplies official leaflets only. ICA start dates are not inferred. Lidl regional price differences and personal coupons are excluded. Leaflet publication dates are distinguished from offer-validity dates.
+All six sources use the public cloud sync button. ICA and Lidl supply product offers; City Gross product offers are parsed from public official PDFs, with page references and full leaflet links. ICA start dates are not inferred. Lidl regional price differences and personal coupons are excluded. Leaflet publication dates are distinguished from offer-validity dates.
 
 有问题或建议，可以发邮件给我：**wwwzyccc7@gmail.com**。Questions or suggestions: **wwwzyccc7@gmail.com**.
+
+### 优惠显示 / Offer visibility
+
+默认显示全部有效优惠，选择门店也会切换到全部优惠。列表显示已展示数量和总数，每次继续显示 24 条。“值得买精选”只是符合筛选规则的子集，数量较少不表示门店只发布了这些商品。Lidl 同时抓取带日期区间和“Från”开始日期的食品、非食品活动。City Gross 保留当前与下周宣传册链接，但只解析价格已生效的宣传册；宣传册中餐饮广告价格不一定是折扣。
+
+All active offers are shown by default. Store selection resets to All deals. The visible count and total explain pagination. Best buys are a subset. Lidl includes food, kitchen, clothing and home campaigns. City Gross retains current and upcoming leaflet links; product extraction uses currently valid leaflets. Publisher dates do not override price validity.

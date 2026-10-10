@@ -14,6 +14,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Install pinned dependencies
+        run: npm ci
       - name: Package source download
         run: python3 scripts/package-source.py
       - name: Build Worker

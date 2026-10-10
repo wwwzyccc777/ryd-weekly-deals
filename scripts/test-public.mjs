@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {generateKeyPairSync,sign} from 'node:crypto';
 const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
-const source=readFileSync(new URL('../worker/index.js',import.meta.url),'utf8').replace(/const IMPORT_PUBLIC_KEY=[^\n]*;/,'const IMPORT_PUBLIC_KEY='+JSON.stringify(publicKey.export({format:'jwk'}))+';');
+const source=readFileSync(new URL('../worker/index.js',import.meta.url),'utf8').replace(/(?:const|var) IMPORT_PUBLIC_KEY\s*=.*?;/,'const IMPORT_PUBLIC_KEY='+JSON.stringify(publicKey.export({format:'jwk'}))+';');
 const {default:worker,STORES,normalize,safeImage}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 const objects=new Map(),env={BUCKET:{get:async key=>objects.has(key)?{json:async()=>JSON.parse(objects.get(key))}:null,put:async(key,data)=>objects.set(key,data)}};
 const payload={stores:STORES.map(s=>({id:s.id,identity:{name:s.officialName,storeId:s.id},fetchedAt:new Date().toISOString(),raw:{results:[{name:'Jasminris',potentialPromotions:[{code:'test',name:'Jasminris',description:'Sverige • rimmad',price:37.9,qualifyingCount:1,comparePrice:'18:95 kr/kg',startDate:'05/10-2026',endDate:'11/10-2026'}]}]}}))};

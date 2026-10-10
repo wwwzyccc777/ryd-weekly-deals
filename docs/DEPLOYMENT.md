@@ -6,7 +6,7 @@
 2. 在项目目录运行 `npx wrangler login`，按官方流程登录。
 3. 运行 `npx wrangler r2 bucket create ryd-weekly-deals`。若选其他桶名，同时修改 `wrangler.jsonc` 的 `bucket_name`。绑定名必须是 `BUCKET`。
 4. 可选：运行 `python scripts/package-source.py`，打包网页的源码下载。正常运行网站无需 Python。
-5. 运行 `npm run build`、`npm test`、`npm run validate`。
+5. 先运行 `npm ci`，再运行 `npm run build`、`npm test`、`npm run validate`。
 6. 运行 `npx wrangler deploy`。Wrangler 会按配置重新构建 Worker。
 7. 打开返回的网址，点击“从官网更新”。检查三个门店的同步时间和数据；首次同步前会显示有日期的快照。
 

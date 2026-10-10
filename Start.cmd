@@ -7,6 +7,10 @@ if errorlevel 1 (
  exit /b 1
 )
 echo Starting Ryd Weekly Grocery Guide...
+if not exist node_modules\unpdf (
+ call npm ci
+ if errorlevel 1 (pause & exit /b 1)
+)
 echo Open http://127.0.0.1:8787 in your browser.
 node scripts/compose.mjs
 if errorlevel 1 (pause & exit /b 1)

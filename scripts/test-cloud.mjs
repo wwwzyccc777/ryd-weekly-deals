@@ -16,15 +16,17 @@ globalThis.fetch=async(url,options)=>{
  if(u.hostname==='www.citygross.se'){
   if(u.pathname.endsWith('/stores'))return Response.json([{data:{id:9097,siteId:168,storeName:'Linköping Tornby'}}]);
   if(u.pathname.endsWith('/storeNumber'))return Response.json({storeNumber:3231});
-  return Response.json(f.citygross);
+  const [y,m,d]=today().split('-');return Response.json([{...f.citygross[0],availableFrom:today(),subTitle:`Priser ${Number(d)}/${Number(m)} till ${Number(d)}/${Number(m)}`}]);
  }
+ if(u.hostname==='online.flippingbook.com')return new Response("PrivateContentRoot: 'https://d123.cloudfront.net/test-private/'\nvar initialPolicies = "+JSON.stringify([{PathPrefix:'://d123.cloudfront.net/',Policy:'public-test',Signature:'public-test',KeyId:'public-test'}])+';');
+ if(u.hostname==='d123.cloudfront.net')return new Response(readFileSync(new URL('./fixtures/city-test.pdf',import.meta.url)),{headers:{'Content-Type':'application/pdf'}});
  if(u.pathname.includes('/axfood/rest/store/')){const s=STORES.find(x=>x.id===u.pathname.split('/').at(-1));return Response.json({name:s.officialName,storeId:s.id});}
  const id=u.searchParams.get('q');assert.ok(STORES.some(s=>s.id===id));return Response.json({pagination:{numberOfPages:1},results:[{name:'Jasminris',potentialPromotions:[{code:'cloud-test',name:'Jasminris',price:37.9,qualifyingCount:1,comparePrice:'18:95 kr/kg',startDate:'05/10-2026',endDate:'11/10-2026'}]}]});
 };
 try{
  const req=()=>new Request('https://example.test/api/update',{method:'POST',headers:{Origin:'https://example.test'},body:'{}'});
- const first=await (await worker.fetch(req(),env)).json();assert.equal(first.job.state,'succeeded');assert.equal(first.data.storage,'persistent');assert.equal(first.data.stores.length,6);assert.ok(first.data.stores.every(s=>s.items.length>0&&s.status==='live'));assert.equal(sourceFetches,13);
- const again=await (await worker.fetch(req(),env)).json();assert.ok(again.reused);assert.ok(again.cooldownSeconds>0);assert.equal(sourceFetches,13);
+ const first=await (await worker.fetch(req(),env)).json();assert.equal(first.job.state,'succeeded');assert.equal(first.data.storage,'persistent');assert.equal(first.data.stores.length,6);assert.ok(first.data.stores.every(s=>s.items.length>0&&s.status==='live'));assert.equal(first.data.stores.find(s=>s.store.key==='citygross').items.length,12);const initialFetches=sourceFetches;assert.ok(initialFetches>=15);
+ const again=await (await worker.fetch(req(),env)).json();assert.ok(again.reused);assert.ok(again.cooldownSeconds>0);assert.equal(sourceFetches,initialFetches);
  assert.equal((await worker.fetch(new Request('https://example.test/api/update',{method:'POST',headers:{Origin:'https://evil.example'}}),env)).status,403);
  assert.equal((await worker.fetch(new Request('https://example.test/api/import',{method:'POST',body:'{}'}),env)).status,401);
  const status=await (await worker.fetch(new Request('https://example.test/api/update'),env)).json();assert.equal(status.job.state,'succeeded');assert.equal(status.mode,'cloud');

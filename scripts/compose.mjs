@@ -1,4 +1,5 @@
 import {readFileSync,writeFileSync,existsSync,mkdirSync} from 'node:fs';
+import {build} from 'esbuild';
 const read=p=>readFileSync(p,'utf8').replace(/^\uFEFF/,'');
 const pairs=p=>Object.fromEntries(read(p).split(/\r?\n/).filter(x=>x.includes('=')).map(x=>[x.slice(0,x.indexOf('=')),x.slice(x.indexOf('=')+1)]));
 const html=read('src/ui.html').replace('<!--APP_SCRIPT-->','<script>'+read('src/ui.js')+'</script>');
@@ -7,5 +8,5 @@ const constants={ZH:JSON.parse(read('data/names.zh.json')),EN:pairs('data/names.
 const prefix=Object.entries(constants).map(([k,v])=>'const '+k+'='+JSON.stringify(v)+';').join('\n');
 const times=JSON.parse(read('data/snapshot-times.json'));
 mkdirSync('worker',{recursive:true});
-writeFileSync('worker/index.js',prefix+'\nconst SEED=[];\n'+core+'\nconst seedTimes='+JSON.stringify(times)+';\nfor(const store of STORES)SEED.push({store,items:normalize(RAW[store.key]||{results:[]},store),fetchedAt:seedTimes[store.key]||null,status:"snapshot",error:null});\n');
+await build({stdin:{contents:prefix+'\nconst SEED=[];\n'+core+'\nconst seedTimes='+JSON.stringify(times)+';\nfor(const store of STORES)SEED.push({store,items:normalize(RAW[store.key]||{results:[]},store),leaflets:RAW[store.key]?.leaflets||[],sourcePages:RAW[store.key]?.sourcePages||null,fetchedAt:seedTimes[store.key]||null,status:"snapshot",error:null});\n',resolveDir:new URL('../src/',import.meta.url).pathname.replace(/^\/(\w:)/,'$1'),sourcefile:'entry.mjs'},bundle:true,format:'esm',platform:'browser',target:'es2022',external:['node:*','@napi-rs/canvas','pdfjs-dist/package.json'],outfile:'worker/index.js',minify:false});
 console.log('Generated bilingual Worker from src/ and data/.');

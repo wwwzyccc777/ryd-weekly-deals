@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {OPS} from 'unpdf/pdfjs';
+import {cityPageProducts,cityPDFPages,coveredTextIDs} from '../src/city-leaflet.mjs';
+const pages=JSON.parse(readFileSync(new URL('./fixtures/city-positions.json',import.meta.url),'utf8'));
+const products=cityPageProducts(pages),get=name=>products.find(x=>x.name===name);
+assert.equal(get('Revben').price,59.95);assert.equal(get('Högrev').price,189);
+assert.equal(get('Bacon').quantity,2);assert.equal(get('Bacon').price,29);
+assert.equal(get('Falukorv').quantity,2);assert.equal(get('Falukorv').member,true);
+assert.equal(get('Tacoprodukter').quantity,10);assert.equal(get('Fruktdryck').price,9.95);
+assert.equal(get('Bamse spel, pussel').price,null);assert.equal(get('Bamse spel, pussel').percent,15);
+assert.equal(get('Byggsats').price,null);assert.equal(get('Glass').price,37.8);
+assert.ok(!get('Sommarplantor 10-pack'));assert.ok(get('Bakelsebuffé').description.includes('torsdag - fredag'));
+const covered=coveredTextIDs({fnArray:[OPS.beginMarkedContentProps,OPS.endMarkedContent,OPS.save,OPS.transform,OPS.paintImageXObject,OPS.restore,OPS.beginMarkedContentProps],argsArray:[['P',1],null,null,[822,0,0,1133,0,0],['image',822,1133],null,['P',2]]},822,1133);
+assert.deepEqual([...covered],[1]);
+const synthetic=cityPageProducts(await cityPDFPages(new Uint8Array(readFileSync(new URL('./fixtures/city-test.pdf',import.meta.url)))));
+assert.equal(synthetic.length,12);assert.deepEqual(synthetic.map(x=>x.price),Array.from({length:12},(_,i)=>20+i));
+console.log('Leaflet geometry, superscript cents, bundle quantities, PRIO, percent discounts, hidden layout filtering and PDF end-to-end parsing passed.');
