@@ -1,4 +1,4 @@
-// Visitors can ask the server to fetch three fixed official sources, never upload data.
+// Visitors can ask the server to fetch fixed official sources, never upload data.
 const UPDATE_COOLDOWN=10*60*1000;
 const json=(x,status=200)=>Response.json(x,{status,headers:{'Cache-Control':'no-store'}});
 async function readObject(env,key){const o=await env.BUCKET.get(key);return o?o.json():null;}
@@ -11,7 +11,8 @@ export async function publicUpdate(request,env){
  if(!env.BUCKET){
   if(request.method==='GET')return json({job:null,mode:'local',cooldownSeconds:0});
   if(request.method!=='POST')return json({error:'Method not allowed'},405);
-  return json({job:{state:'succeeded',completedAt:new Date().toISOString()},mode:'local',data:await collect(env,true)});
+  const data=await collect(env,true);
+  return json({job:{state:data.stores.every(s=>s.status!=='failed')?'succeeded':'failed',completedAt:new Date().toISOString()},mode:'local',data});
  }
  if(request.method==='GET')return json(await updateStatus(env));
  if(request.method!=='POST')return json({error:'Method not allowed'},405);

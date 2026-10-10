@@ -12,12 +12,13 @@ const req=(text,head)=>new Request('https://example.test/api/import',{method:'PO
 assert.equal((await worker.fetch(req(body,{}),env)).status,401);assert.equal(objects.size,0);
 assert.equal((await worker.fetch(req(body+' ',headers(body)),env)).status,401);
 assert.equal((await worker.fetch(req(body,headers(body,String(Date.now()-360000))),env)).status,401);
-assert.equal((await worker.fetch(req(body,headers(body)),env)).status,200);assert.equal(objects.size,3);
+assert.equal((await worker.fetch(req(body,headers(body)),env)).status,200);assert.equal(objects.size,STORES.length);
 const back=await (await worker.fetch(new Request('https://example.test/api/deals'),env)).json();
 assert.equal(back.storage,'persistent');assert.ok(back.stores.every(s=>s.items[0].zh==='茉莉香米'&&s.items[0].en==='Jasmine rice'&&s.items[0].descriptionEn==='Sweden · salt-cured'));
 assert.equal((await worker.fetch(req('{}',headers('{}')),env)).status,400);
 assert.equal(safeImage('https://evil.example/test.png'),'');assert.ok(safeImage('https://assets.axfood.se/test.jpg'));
 assert.ok(safeImage('https://res.cloudinary.com/willys-eu/image/upload/v1/test.jpg'));assert.equal(safeImage('https://res.cloudinary.com/unknown-account/image/upload/test.jpg'),'');
+assert.ok(safeImage('https://assets.icanet.se/example.jpg'));assert.ok(safeImage('https://www.lidl.se/assets/example.jpg'));assert.equal(safeImage('https://www.lidl.se.evil.example/assets/example.jpg'),'');assert.equal(safeImage('https://www.lidl.se/other/example.jpg'),'');
 const raw=JSON.parse(readFileSync(new URL('../data/snapshot.json',import.meta.url),'utf8'));const items=STORES.flatMap(s=>normalize(raw[s.key],s));
 assert.ok(items.length>400);assert.equal(items.filter(x=>!x.zh||!x.en).length,0);assert.equal(items.filter(x=>x.description&&(!x.descriptionZh||!x.descriptionEn)).length,0);
 console.log('Public write protection, tampering, expiry, signed sync, persistent readback, image allowlist and full bilingual coverage passed.');

@@ -1,11 +1,14 @@
 export const STORES = [
  {id:'4193',key:'ryd',name:'Hemköp Ryd',officialName:'Hemköp Linköping Ryd',host:'https://www.hemkop.se',url:'https://www.hemkop.se/erbjudanden/4193',address:'Mårdtorpsgatan 27'},
  {id:'2298',key:'tornby',name:'Willys Tornby',officialName:'Willys Linköping Tornby',host:'https://www.willys.se',url:'https://www.willys.se/erbjudanden/butik?StoreID=2298',address:'Norra Svedengatan 20'},
- {id:'2178',key:'skag',name:'Willys Skäggetorp',officialName:'Willys Linköping Skäggetorp',host:'https://www.willys.se',url:'https://www.willys.se/erbjudanden/butik?StoreID=2178',address:'Skäggetorps Centrum'}
+ {id:'2178',key:'skag',name:'Willys Skäggetorp',officialName:'Willys Linköping Skäggetorp',host:'https://www.willys.se',url:'https://www.willys.se/erbjudanden/butik?StoreID=2178',address:'Skäggetorps Centrum'},
+ {id:'1003823',key:'ica',provider:'ica',name:'ICA Maxi Linköping',officialName:'Maxi ICA Stormarknad Linköping',host:'https://www.ica.se',url:'https://www.ica.se/erbjudanden/maxi-ica-stormarknad-linkoping-1003823/',address:'Västra Svedengatan 12',scopeZh:'门店公开优惠；官网只提供截止日期时不推断开始日期',scopeEn:'Public store offers; missing start dates are not inferred'},
+ {id:'lidl-linkoping',key:'lidl',provider:'lidl',name:'Lidl Linköping',officialName:'Lidl Linköping · Järdalavägen 1',host:'https://www.lidl.se',url:'https://www.lidl.se/',identityURL:'https://www.lidl.se/s/sv-SE/butiker/linkoeping/jaerdalavaegen-1/',address:'Järdalavägen 1',scopeZh:'官网全国同价活动；不含地区差异报价和个人券',scopeEn:'Official offers with identical prices across Sweden; regional differences and personal coupons excluded'},
+ {id:'citygross-3231',key:'citygross',provider:'citygross',name:'City Gross Tornby',officialName:'City Gross Linköping Tornby',host:'https://www.citygross.se',url:'https://www.citygross.se/butiker/linkoping-tornby',address:'Norra Svedengatan 9',flyerOnly:true,scopeZh:'官方宣传册；商品价格暂未解析，不纳入比价推荐',scopeEn:'Official leaflets; product prices are not parsed or used in recommendations'}
 ];
 export const num = s => {const m=String(s??'').replace(/(\d):(\d)/g,'$1.$2').replace(/,/g,'.').match(/\d+(?:\.\d+)?/);return m?Number(m[0]):null;};
-export function dateISO(s){const m=String(s||'').match(/(\d{2})\/(\d{2})-(\d{4})/);return m?`${m[3]}-${m[2]}-${m[1]}`:null;}
-function today(){return new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Stockholm'}).format(new Date());}
+export function dateISO(s){if(/^\d{4}-\d{2}-\d{2}/.test(String(s||'')))return String(s).slice(0,10);const m=String(s||'').match(/(\d{2})\/(\d{2})-(\d{4})/);return m?`${m[3]}-${m[2]}-${m[1]}`:null;}
+export function today(){return new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Stockholm'}).format(new Date());}
 function category(name,cat=''){
  const t=(name+' '+cat).toLowerCase();
  if(/hund|katt|djur/.test(t))return '宠物';
@@ -23,20 +26,20 @@ export function normalize(raw,store){
  for(const x of raw.results||[])for(const p of x.potentialPromotions||[]){
   const name=p.name||x.name||'', label=p.cartLabel||p.rewardLabel||'', quantity=num(p.qualifyingCount)||1;
   const perKg=/\/\s*kg/i.test(p.rewardLabel||label), threshold=/handla för|köp andra|vid köp|för minst/i.test(label+' '+(p.conditionLabel||''))||!!p.threshold;
-  let price=typeof p.price==='number'&&p.price>0?p.price:num(p.rewardLabel);
+  let price=p.priceUnknown?null:typeof p.price==='number'&&p.price>0?p.price:num(p.rewardLabel);
   const uncertain=price===null||/\d\s*[-–]\s*\d/.test(p.rewardLabel||'')||(/%/.test(p.rewardLabel||'')&&p.price==null);
   const unitPrice=uncertain?null:price/quantity;
   const compare=p.comparePrice||'', range=/\d[.,:]?\d*\s*[-–]\s*\d/.test(compare);
   const unitMatch=compare.match(/\/\s*(kg|l|st|tvätt)/i);const basis=unitMatch?.[1]?.toLowerCase()||null;
   const comparisonValue=range?null:num(compare);
-  const description=p.description||''; const descriptionZh=ZH_DESCRIPTION[description]||null; const reference=num(x.priceNoUnit);
+  const description=p.description||''; const descriptionZh=ZH_DESCRIPTION[description]||p.descriptionZh||null; const reference=num(x.priceNoUnit);
   const rawSave=p.savePrice||'', hasSave=/spara/i.test(rawSave)&&!/\d[.,:]?\d*\s*[-–]\s*\d/.test(rawSave);
   const saved=hasSave?num(rawSave):null;
   // Store-supplied savings are the comparison basis; a representative variant's ordinary price may differ.
   const discount=saved!==null&&unitPrice>0&&!threshold?Math.round(saved/(unitPrice+saved)*100):null;
   const member=p.campaignType==='LOYALTY'||/klubbpris|plus|medlem/i.test(p.textLabelGenerated+' '+p.textLabel);
   const start=dateISO(p.startDate),end=dateISO(p.endDate);
-  result.push({id:store.key+':'+p.code,productCode:p.mainProductCode||null,store:store.key,name,zh:ZH[name]||null,en:EN[name]||null,descriptionEn:EN_DESCRIPTION[description]||null,translation:ZH[name]?'词库':'待翻译',translationEn:EN[name]?'reviewed':'missing',brand:x.manufacturer||(p.brands||[]).join(', '),size:p.weightVolume||x.displayVolume||'',description,descriptionZh,category:category(name,x.googleAnalyticsCategory),price,unitPrice,quantity,perKg,uncertain,threshold,reference,discount,savings:rawSave,compare,basis,comparisonValue,range,member,limit:p.redeemLimit??p.promotionRedeemLimit??null,limitText:p.redeemLimitLabel||'',condition:p.conditionLabel||'',label,start,end,active:!!start&&!!end&&start<=today()&&today()<=end,image:safeImage(x.image?.url),source:store.url,url:p.mainProductCode?store.host+'/produkt/'+p.mainProductCode:store.url,deposit:/pant/i.test(compare+' '+label),frozen:/djupfryst|fryst/i.test(description),mix:!!p.realMixAndMatch});
+  result.push({id:store.key+':'+p.code,kind:p.kind||'product',currentListing:!!p.currentListing,productCode:p.mainProductCode||null,store:store.key,name,zh:ZH[name]||null,en:EN[name]||null,descriptionEn:EN_DESCRIPTION[description]||p.descriptionEn||null,translation:ZH[name]?'词库':'待翻译',translationEn:EN[name]?'reviewed':'missing',brand:x.manufacturer||(p.brands||[]).join(', '),size:p.weightVolume||x.displayVolume||'',description,descriptionZh,category:p.providerCategory||category(name,x.googleAnalyticsCategory),price,unitPrice,quantity,perKg,uncertain,threshold,reference,discount,savings:rawSave,discountBasis:p.savingsBasis||'stated',compare,basis,comparisonValue,range,member,limit:p.redeemLimit??p.promotionRedeemLimit??null,limitText:p.redeemLimitLabel||'',condition:p.conditionLabel||'',label,start,end,active:!!end&&end>=today()&&(start?start<=today():!!p.currentListing),image:safeImage(x.image?.url),source:store.url,url:p.productURL|| (p.mainProductCode?store.host+'/produkt/'+p.mainProductCode:store.url),deposit:/pant/i.test(compare+' '+label),frozen:/djupfryst|fryst/i.test(name+" "+description),mix:!!p.realMixAndMatch});
  }
  return [...new Map(result.map(x=>[x.id,x])).values()];
 }
@@ -59,7 +62,7 @@ export function assess(x){
  let score=0,reasons=[];
  const target=TARGETS.find(([rx,basis])=>rx.test(x.name)&&basis===x.basis);
  if(target&&x.comparisonValue!==null&&x.comparisonValue<=target[2]){score+=55+Math.min(20,Math.round((1-x.comparisonValue/target[2])*40));reasons.push(`${target[3]}；${x.comparisonValue.toFixed(2)} kr/${x.basis} ≤ 参考阈值 ${target[2]} kr/${x.basis}`);}
- if(x.discount!==null&&x.discount>=25){score+=Math.min(35,Math.round(x.discount*.6));reasons.push(`官方标注节省金额对应约 ${x.discount}% 优惠`);}
+ if(x.discount!==null&&x.discount>=25){score+=Math.min(35,Math.round(x.discount*.6));reasons.push(x.discountBasis==='regular'?`按官网普通价估算约 ${x.discount}% 优惠`:`官方标注节省金额对应约 ${x.discount}% 优惠`);}
  if(x.category==='零食饮料'||['其他','宠物'].includes(x.category)){score=Math.min(score,35);reasons.push('按个人需要买，优惠大不代表需要囤货');}
  if(x.threshold){score=0;reasons=['有额外消费条件，先确认是否本来就需要凑单'];}
  if(x.uncertain||x.range){score=0;reasons=['价格或规格存在范围，暂不自动评为值得买'];}
@@ -74,13 +77,13 @@ async function getJSON(url){const source=new URL(url);const headers={Accept:'app
 export async function translateUnknown(items){
  items=await translateLanguage(items,'en','en','descriptionEn','translationEn');
  const unknown=[...new Set(items.flatMap(x=>[...(!x.zh?[x.name]:[]),...(x.description&&!x.descriptionZh?[x.description]:[])]))];const translations=new Map();
- for(let i=0;i<unknown.length;i+=12){const batch=unknown.slice(i,i+12);try{const d=await getJSON('https://translate.googleapis.com/translate_a/single?'+new URLSearchParams({client:'gtx',sl:'sv',tl:'zh-CN',dt:'t',q:batch.join('\n')}));const lines=d[0].map(x=>x[0]).join('').split('\n').map(x=>x.trim());if(lines.length===batch.length)batch.forEach((x,j)=>{if(/[\u3400-\u9fff]/.test(lines[j]))translations.set(x,lines[j]);});}catch{}}
+ for(let i=0;i<unknown.length;i+=28){const batch=unknown.slice(i,i+28);try{const d=await getJSON('https://translate.googleapis.com/translate_a/single?'+new URLSearchParams({client:'gtx',sl:'sv',tl:'zh-CN',dt:'t',q:batch.join('\n')}));const lines=d[0].map(x=>x[0]).join('').split('\n').map(x=>x.trim());if(lines.length===batch.length)batch.forEach((x,j)=>{if(/[\u3400-\u9fff]/.test(lines[j]))translations.set(x,lines[j]);});}catch{}}
  return items.map(x=>({...x,zh:x.zh||translations.get(x.name)||null,descriptionZh:x.descriptionZh||translations.get(x.description)||null,translation:x.zh?'词库':translations.has(x.name)?'机器翻译':'翻译暂不可用'}));
 }
-export function safeImage(value){try{const u=new URL(value);return u.protocol==='https:'&&(u.hostname==='assets.axfood.se'||u.hostname==='res.cloudinary.com'&&/^\/(willys-eu|hemkop-eu)\/image\/upload\//.test(u.pathname))?u.href:'';}catch{return '';}}
+export function safeImage(value){try{const u=new URL(value);return u.protocol==='https:'&&(u.hostname==='assets.axfood.se'||u.hostname==='assets.icanet.se'||u.hostname==='www.lidl.se'&&u.pathname.startsWith('/assets/')||u.hostname==='res.cloudinary.com'&&/^\/(willys-eu|hemkop-eu)\/image\/upload\//.test(u.pathname))?u.href:'';}catch{return '';}}
 async function translateLanguage(items,lang,nameField,descField,statusField){
  const unknown=[...new Set(items.flatMap(x=>[...(!x[nameField]?[x.name]:[]),...(x.description&&!x[descField]?[x.description]:[])]))];const translated=new Map();
- for(let i=0;i<unknown.length;i+=10){const batch=unknown.slice(i,i+10);try{const d=await getJSON('https://translate.googleapis.com/translate_a/single?'+new URLSearchParams({client:'gtx',sl:'sv',tl:lang,dt:'t',q:batch.join('\n')}));const lines=d[0].map(x=>x[0]).join('').split('\n').map(x=>x.trim());if(lines.length===batch.length)batch.forEach((x,j)=>{if(lines[j])translated.set(x,lines[j]);});}catch{}}
+ for(let i=0;i<unknown.length;i+=28){const batch=unknown.slice(i,i+28);try{const d=await getJSON('https://translate.googleapis.com/translate_a/single?'+new URLSearchParams({client:'gtx',sl:'sv',tl:lang,dt:'t',q:batch.join('\n')}));const lines=d[0].map(x=>x[0]).join('').split('\n').map(x=>x.trim());if(lines.length===batch.length)batch.forEach((x,j)=>{if(lines[j])translated.set(x,lines[j]);});}catch{}}
  return items.map(x=>({...x,[nameField]:x[nameField]||translated.get(x.name)||null,[descField]:x[descField]||translated.get(x.description)||null,[statusField]:x[nameField]?'reviewed':translated.has(x.name)?'machine':'missing'}));
 }
 const memory=new Map();const MAX_AGE=6*60*60*1000;
@@ -92,12 +95,9 @@ async function fetchStore(store,env,force=false){
  const old=await previous(store,env);
  if(!force&&old&&Date.now()-Date.parse(old.fetchedAt)<MAX_AGE)return {...old,status:'cached',error:null};
  try{
-  const identity=await getJSON(store.host+'/axfood/rest/store/'+store.id);
-  if(identity.name!==store.officialName||String(identity.storeId)!==store.id)throw Error('门店身份验证失败');
-  let all=[],page=0,totalPages=1;
-  do{const raw=await getJSON(store.host+'/search/campaigns/offline?'+new URLSearchParams({q:store.id,page:String(page),size:'300',disableMimerSort:'true'}));if(!Array.isArray(raw.results)||!raw.pagination)throw Error('优惠格式已变化');all.push(...raw.results);totalPages=raw.pagination.numberOfPages||1;if(totalPages>12)throw Error('分页数量异常');page++;}while(page<totalPages);
-  if(!all.length)throw Error('来源没有返回优惠，保留上次结果');
-  const items=await translateUnknown(normalize({results:all},store));
+  const raw=await fetchOfficialRaw(store);if(!raw.results?.length)throw Error('来源没有返回优惠，保留上次结果');
+  const knownNames=new Map((old?.items||[]).map(x=>[x.name,x])),knownDescriptions=new Map((old?.items||[]).map(x=>[x.description,x]));
+  const items=await translateUnknown(normalize(raw,store).map(x=>{const n=knownNames.get(x.name),d=knownDescriptions.get(x.description);return {...x,zh:x.zh||n?.zh,en:x.en||n?.en,descriptionZh:x.descriptionZh||d?.descriptionZh,descriptionEn:x.descriptionEn||d?.descriptionEn};}));
   const data={store,items,fetchedAt:new Date().toISOString(),status:'live',error:null};
   if(env.BUCKET)await env.BUCKET.put('stores/'+store.id+'.json',JSON.stringify(data),{httpMetadata:{contentType:'application/json'}});
   memory.set(store.id,data);return data;
@@ -105,7 +105,7 @@ async function fetchStore(store,env,force=false){
 }
 export async function collect(env={},force=false){
  const stores=await Promise.all(STORES.map(async s=>env.BUCKET?(await previous(s,env)||{store:s,items:[],fetchedAt:null,status:'failed',error:'尚未同步'}):fetchStore(s,env,force)));
- for(const s of stores){s.items=s.items.map(x=>{const active=!!x.start&&!!x.end&&x.start<=today()&&today()<=x.end;return {...x,zh:ZH[x.name]||x.zh,en:EN[x.name]||x.en,descriptionZh:ZH_DESCRIPTION[x.description]||x.descriptionZh,descriptionEn:EN_DESCRIPTION[x.description]||x.descriptionEn,image:safeImage(x.image),active,...assess({...x,active})};});s.activeCount=s.items.filter(x=>x.active).length;s.stale=!s.fetchedAt||Date.now()-Date.parse(s.fetchedAt)>5*24*60*60*1000;s.translationMissing=s.items.filter(x=>!x.zh).length;s.translationMissingEn=s.items.filter(x=>!x.en).length;}
+ for(const s of stores){s.store=STORES.find(x=>x.id===s.store.id)||s.store;s.items=s.items.map(x=>{const active=!!x.end&&x.end>=today()&&(x.start?x.start<=today():!!x.currentListing);return {...x,zh:ZH[x.name]||x.zh,en:EN[x.name]||x.en,descriptionZh:ZH_DESCRIPTION[x.description]||x.descriptionZh,descriptionEn:EN_DESCRIPTION[x.description]||x.descriptionEn,image:safeImage(x.image),active,...assess({...x,active})};});s.activeCount=s.items.filter(x=>x.active).length;s.stale=!s.fetchedAt||Date.now()-Date.parse(s.fetchedAt)>5*24*60*60*1000;s.translationMissing=s.items.filter(x=>!x.zh).length;s.translationMissingEn=s.items.filter(x=>!x.en).length;}
  return {stores,checkedAt:new Date().toISOString(),today:today(),storage:env.BUCKET?'persistent':'memory',rules:TARGETS.map(x=>({label:x[4],basis:x[1],threshold:x[2]}))};
 }
 export default {async fetch(request,env={},ctx){
@@ -118,7 +118,7 @@ export default {async fetch(request,env={},ctx){
   const text=await request.text();if(text.length>8*1024*1024)return new Response('Payload too large',{status:413});
   if(!await verifyImport(request,text))return Response.json({error:'Unauthorized update'},{status:401,headers:{'Cache-Control':'no-store'}});
   try{
-   const payload=JSON.parse(text);if(!Array.isArray(payload.stores)||payload.stores.length!==3)throw Error('必须提供三家指定门店的结果');
+   const payload=JSON.parse(text);if(!Array.isArray(payload.stores)||payload.stores.length!==STORES.length)throw Error('必须提供所有指定门店的结果');
    const seen=new Set();
    for(const record of payload.stores){
     const store=STORES.find(s=>s.id===record.id);if(!store||seen.has(record.id))throw Error('门店编号无效或重复');seen.add(record.id);
@@ -146,7 +146,7 @@ export default {async fetch(request,env={},ctx){
   try{const data=await collect(env,path==='/api/refresh');return Response.json(data,{headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}catch(e){return Response.json({error:'更新失败：'+e.message},{status:502});}
  }
  if(path!=='/')return new Response('Not found',{status:404});
- return new Response(HTML,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','Content-Security-Policy':"default-src 'self'; img-src 'self' https://assets.axfood.se https://res.cloudinary.com data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'self' https://chatgpt.com https://*.openai.com"}});
+ return new Response(HTML,{headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin','Content-Security-Policy':"default-src 'self'; img-src 'self' https://assets.axfood.se https://assets.icanet.se https://www.lidl.se https://res.cloudinary.com data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'self' https://chatgpt.com https://*.openai.com"}});
 }};
 export async function verifyImport(request,body){
  try{

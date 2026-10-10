@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {parseICA,parseLidl,adaptLidl,adaptCityFlyers,STORES,normalize,assess} from '../worker/index.js';
+const f=JSON.parse(readFileSync(new URL('./fixtures/providers.json',import.meta.url),'utf8'));
+const ica=STORES.find(x=>x.key==='ica'),lidl=STORES.find(x=>x.key==='lidl'),city=STORES.find(x=>x.key==='citygross');
+export const icaHTML=offers=>'<script>window.__INITIAL_DATA__ = '+JSON.stringify({generic:{headerData:{store:{name:ica.officialName,accountNumber:ica.id}}},offers:{weeklyOffers:offers}}).replace(/}$/,',"unused":undefined,"map":new Map([])}')+';</script>';
+export const lidlHTML=products=>products.map(x=>'<div data-grid-data="'+JSON.stringify(x).replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'"></div>').join('');
+const items=normalize(parseICA(icaHTML(f.ica),ica),ica);
+assert.equal(items.length,3);assert.ok(items[0].price>0);assert.equal(items[0].start,null);assert.equal(items[0].currentListing,true);assert.ok(items[0].member);
+for(const x of items.slice(1)){assert.equal(x.price,null);assert.equal(x.uncertain,true);assert.equal(assess({...x,active:true}).recommended,false);}
+assert.throws(()=>parseICA(icaHTML(f.ica).replace(ica.officialName,'Wrong store'),ica),/身份/);
+const wrongStore=structuredClone(f.ica);wrongStore.forEach(x=>x.stores=x.stores.map(s=>({...s,BMSStoreId:9999})));assert.equal(parseICA(icaHTML(wrongStore),ica).results.length,0);
+assert.equal(parseLidl(lidlHTML(f.lidl)).length,2);
+const common=adaptLidl(f.lidl,lidl);assert.ok(common.results.length>=2);assert.ok(normalize(common,lidl).every(x=>x.image.startsWith('https://www.lidl.se/assets/')));
+const regional=structuredClone(f.lidl);regional.forEach(x=>Object.values(x.regionsV2)[0].regionPriceId='different');assert.equal(adaptLidl(regional,lidl).results.length,0);
+const varied=structuredClone(f.lidl);varied.forEach(x=>{Object.values(x.regionsPrices).forEach(r=>{if(r.currentPrice)r.currentPrice.variantsHaveDifferentPrices=true;});});assert.ok(normalize(adaptLidl(varied,lidl),lidl).filter(x=>!x.member).every(x=>x.price===null&&x.uncertain));
+const leaflets=normalize(adaptCityFlyers(f.citygross,city),city);assert.equal(leaflets.length,2);assert.equal(leaflets[1].start,'2026-10-12');assert.equal(f.citygross[1].availableFrom.slice(0,10),'2026-10-10');
+assert.ok(leaflets.every(x=>x.kind==='flyer'&&x.price===null&&!assess({...x,active:true}).recommended));
+assert.equal(adaptCityFlyers(f.citygross.map(x=>({...x,store:9999})),city).results.length,0);
+console.log('Retailer identities, ICA fixed/percent/bundle mechanics, missing start dates, Lidl regional scope and flyer publication versus price dates passed.');
