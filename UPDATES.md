@@ -17,3 +17,7 @@ The optional local backup script signs imports with ECDSA P-256. Private keys re
 自行部署需创建自己的 Worker 和 R2 BUCKET；若启用备用上传，先生成自己的密钥并部署新公钥。正常云端按钮更新无须另装本机后台程序。
 
 ICA、Lidl 与原有门店一起同步商品优惠。City Gross Tornby 下载公开宣传册 PDF，解析商品、价格和条件并保留页码；不要把宣传册发布日期当作优惠开始日期。所有来源共用全站 10 分钟冷却。
+
+City Gross 商品卡片显示官方宣传册中对应的商品图片区域。服务器按宣传册版本缓存合成图片，临时官方读取签名只在服务器内部使用。新一周同步时同时更新图片来源与裁切位置。
+
+City Gross cards show the corresponding product area from the official leaflet. Composed page images are cached by publication version; temporary publisher read signatures stay server-side. Weekly sync updates image sources and crop positions together.

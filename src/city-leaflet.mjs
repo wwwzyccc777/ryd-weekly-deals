@@ -2,6 +2,34 @@ import {getDocumentProxy} from 'unpdf';
 import {OPS} from 'unpdf/pdfjs';
 
 const multiply=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
+export function pageImageRects(operators,width,height){
+ let matrix=[1,0,0,1,0,0],clip=null,pendingClip=false,stack=[],images=[];
+ const bounds=(corners)=>[Math.min(...corners.map(p=>p[0])),Math.min(...corners.map(p=>p[1])),Math.max(...corners.map(p=>p[0])),Math.max(...corners.map(p=>p[1]))];
+ const transform=(x,y)=>[matrix[0]*x+matrix[2]*y+matrix[4],matrix[1]*x+matrix[3]*y+matrix[5]];
+ const intersect=(a,b)=>b?[Math.max(a[0],b[0]),Math.max(a[1],b[1]),Math.min(a[2],b[2]),Math.min(a[3],b[3])]:a;
+ for(let i=0;i<operators.fnArray.length;i++){
+  const fn=operators.fnArray[i],a=operators.argsArray[i];
+  if(fn===OPS.save)stack.push({matrix:[...matrix],clip:clip&&[...clip]});
+  else if(fn===OPS.restore){const state=stack.pop();matrix=state?.matrix||[1,0,0,1,0,0];clip=state?.clip||null;}
+  else if(fn===OPS.transform)matrix=multiply(matrix,a);
+  else if(fn===OPS.clip||fn===OPS.eoClip)pendingClip=true;
+  else if(fn===OPS.constructPath&&pendingClip&&a[2]?.length===4){const b=a[2];clip=intersect(bounds([transform(b[0],b[1]),transform(b[0],b[3]),transform(b[2],b[1]),transform(b[2],b[3])]),clip);pendingClip=false;}
+  else if(fn===OPS.paintImageXObject){
+   const b=intersect(bounds([[0,0],[1,0],[0,1],[1,1]].map(([x,y])=>transform(x,y))),clip);
+   const x=b[0],y=b[1],w=b[2]-x,h=b[3]-y;
+   if(w>=width*.98&&h>=height*.98&&x<=2&&y<=2){images=[];continue;}
+   if(w>=45&&h>=40&&w<width*.8&&h<height*.7)images.push({x:x/width*822,y:(height-y-h)/height*1133,w:w/width*822,h:h/height*1133});
+  }
+ }
+ return images;
+}
+function productImageRect(images,title){
+ const candidates=images.filter(r=>r.y<title.y-20&&r.y+r.h>title.y-320&&r.y+r.h<title.y+160&&r.x+r.w>title.x&&r.x<title.x+220&&Math.abs(r.x+r.w/2-title.x-80)<135);
+ candidates.sort((a,b)=>Math.abs(a.y+a.h-title.y)*.8+Math.abs(a.x+a.w/2-title.x-80)-Math.min(a.w*a.h/1500,30)-(Math.abs(b.y+b.h-title.y)*.8+Math.abs(b.x+b.w/2-title.x-80)-Math.min(b.w*b.h/1500,30)));
+ const r=candidates[0];if(!r)return null;
+ const x=Math.max(0,r.x-6),y=Math.max(0,r.y-6);
+ return {x:Math.round(x),y:Math.round(y),w:Math.round(Math.min(822-x,r.w+12)),h:Math.round(Math.min(1133-y,r.h+12))};
+}
 // Some publisher PDFs contain an obsolete layout painted over by a full-page
 // background image. Text extraction alone includes that obsolete layout.
 export function coveredTextIDs(operators,width,height){
@@ -35,14 +63,14 @@ export async function cityPDFPages(bytes){
     if(!t.str?.trim()||marks.some(id=>covered.has(id)))continue;
     items.push({text:t.str.trim(),x:t.transform[4]/v.width*822,y:(v.height-t.transform[5])/v.height*1133,w:t.width/v.width*822,h:t.height/v.height*1133,font:t.fontName});
    }
-   pages.push({page,items});
+   pages.push({page,items,images:pageImageRects(operators,v.width,v.height)});
   }
  }finally{await pdf.loadingTask.destroy();}
  return pages;
 }
 export function cityPageProducts(pages){
  const products=[];
- for(const {page,items} of pages){
+ for(const {page,items,images=[]} of pages){
   const candidates=items.filter(t=>t.h>15&&t.h<20&&!/^\/|^\+|SPARA|Kampanj|^\d+\s*för$|Begränsat|parti!|pack!|Från vårt|bageri!|Storpack!|Grillade i|butiken!|Priset gäller|från tisdag/.test(t.text));
   const titles=[];
   for(const t of candidates){
@@ -66,7 +94,8 @@ export function cityPageProducts(pages){
    for(const t of lines){if(t.y-last>22)break;description.push(t.text);last=t.y;}
    const detail=description.join(' ');
    const member=/PRIO-medlem|PRIO-pris/i.test(detail)||items.some(t=>/PRIO-pris/.test(t.text)&&Math.abs(t.x-p.x)<15&&t.y<p.y&&p.y-t.y<p.h*1.2);
-   products.push({name:title.text,page,price:amount,percent:percent?Number(p.text):null,unit,quantity:count,description:detail,member});
+   const imageRect=productImageRect(images,title)||{x:Math.max(0,Math.round(title.x-15)),y:Math.max(0,Math.round(p.y-160)),w:Math.min(300,Math.round(822-title.x+15)),h:Math.round(title.bottom-Math.max(0,p.y-160)+15)};
+   products.push({name:title.text,page,imageRect,price:amount,percent:percent?Number(p.text):null,unit,quantity:count,description:detail,member});
   }
  }
  return products;

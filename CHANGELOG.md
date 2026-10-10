@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1 — 2026-10-10
+
+- Display City Gross product areas from the official leaflet, including raster photos and vector artwork.
+- Cache composed images by publication version; keep expiring publisher signatures server-side.
+- Update image sources and crop positions during ordinary anonymous cloud sync.
+
 ## 1.3.0 — 2026-10-10
 
 - Show all active offers by default and when selecting a store; make pagination counts explicit.

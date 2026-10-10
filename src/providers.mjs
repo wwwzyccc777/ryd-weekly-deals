@@ -1,4 +1,5 @@
 import {cityPDFPages,cityPageProducts} from './city-leaflet.mjs';
+import {loadCityPublication,fetchCityAsset,composeCityPageImage,cityImageHeaders} from './city-images.mjs';
 // Public retailer data only. Never evaluate scripts received from a retailer.
 const SOURCE_HEADERS={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36','Accept-Language':'sv-SE,sv;q=0.9,en;q=0.8'};
 async function sourceText(url,headers={}){const r=await fetch(url,{headers:{...SOURCE_HEADERS,...headers},signal:AbortSignal.timeout(25000)});if(!r.ok)throw Error('官方来源返回 HTTP '+r.status);return r.text();}
@@ -46,19 +47,10 @@ export function parseFlyerDates(text,year){const m=String(text||'').match(/(\d{1
 export function adaptCityFlyers(flyers,store){if(!Array.isArray(flyers)||!flyers.length)throw Error('City Gross 尚未返回宣传册');return {results:flyers.filter(x=>String(x.store)==='3231'&&/^https:\/\/online\.flippingbook\.com\/view\/\d+\/?$/.test(x.link)).map(x=>{const {start,end}=parseFlyerDates(x.subTitle,String(x.availableFrom).slice(0,4));return mapped(x.title,'City Gross','','', {code:'flyer-'+x.id+'-'+start,price:null,priceUnknown:true,qualifyingCount:1,startDate:start,endDate:end,kind:'flyer',productURL:x.link,providerCategory:'其他',flyerTitle:x.title,description:'商品价格尚未解析；请查看门店官方宣传册。',descriptionZh:'商品价格尚未解析；请查看门店官方宣传册。',descriptionEn:'Product prices are not parsed. Open the official store leaflet.'});})};}
 async function fetchCityBook(flyer,store){
  const {start,end}=parseFlyerDates(flyer.subTitle,String(flyer.availableFrom).slice(0,4));
- const html=await sourceText(flyer.link);
- const root=html.match(/PrivateContentRoot:\s*'([^']+)'/)?.[1];
- const match=html.match(/(?:var|let|const) initialPolicies\s*=\s*([\s\S]*?);/);
- if(!root||!match||!/^https:\/\/d[\w]+\.cloudfront\.net\/[\w/-]+\/$/.test(root))throw Error('宣传册公开下载格式已变化');
- const policies=JSON.parse(match[1]);const url=root+'common/downloads/publication.pdf';
- const policy=policies.find(p=>url.replace(/^https?/,'').startsWith(p.PathPrefix));
- if(!policy)throw Error('宣传册公开下载链接不可用');
- // Read policies supplied to every anonymous visitor by the official publisher.
- // They expire and are never saved in the public dataset or source archive.
- const r=await fetch(url+'?'+new URLSearchParams({Policy:policy.Policy,Signature:policy.Signature,'Key-Pair-Id':policy.KeyId}),{headers:SOURCE_HEADERS,signal:AbortSignal.timeout(30000)});
- if(!r.ok)throw Error('宣传册下载 HTTP '+r.status);const bytes=new Uint8Array(await r.arrayBuffer());
+ const publication=await loadCityPublication(flyer.link);
+ const bytes=await fetchCityAsset(publication,publication.privateRoot+'common/downloads/publication.pdf',20000000);
  if(bytes.length>20000000||!new TextDecoder().decode(bytes.slice(0,5)).startsWith('%PDF'))throw Error('宣传册 PDF 格式异常');
- const pages=await cityPDFPages(bytes),offers=cityPageProducts(pages);
+ const pages=await cityPDFPages(bytes),offers=cityPageProducts(pages),book=flyer.link.match(/\/view\/(\d+)/)[1];
  if(offers.length<10)throw Error('宣传册商品解析不足，保留上次结果');
  const results=offers.map(x=>{
   let offerStart=start,offerEnd=end;
@@ -75,10 +67,29 @@ async function fetchCityBook(flyer,store){
   }
   const limit=x.description.match(/Max\s+(\d+)\s*([^.]*)/i);
   const code=[flyer.link.match(/\/view\/(\d+)/)[1],x.name,x.description,x.price,x.quantity,x.member,offerStart,offerEnd].join('|');
-  return mapped(x.name,'',size,x.description,{code,price,priceUnknown:price===null,qualifyingCount:x.quantity,rewardLabel:x.percent!==null?`${x.percent}% rabatt`:`${price} kr${/\/(kg|hg)/.test(x.unit)?'/kg':x.quantity>1?' för '+x.quantity:'/st'}`,comparePrice:compare.replace(/\/lit\b/g,'/l'),startDate:offerStart,endDate:offerEnd,campaignType:x.member?'LOYALTY':'PUBLIC',redeemLimit:limit?Number(limit[1]):null,redeemLimitLabel:limit?.[0]||'',productURL:flyer.link+x.page+'/',leafletPage:x.page,originalPriceLabel:hg?`${x.price} kr/hg`:'',providerCategory:/buffé|Bamse|Byggsats|Halloween|ljus|skål|hink|form|jacka|leggings|Cozy/.test(x.name)?'其他':null});
+  return mapped(x.name,'',size,x.description,{code,price,priceUnknown:price===null,qualifyingCount:x.quantity,rewardLabel:x.percent!==null?`${x.percent}% rabatt`:`${price} kr${/\/(kg|hg)/.test(x.unit)?'/kg':x.quantity>1?' för '+x.quantity:'/st'}`,comparePrice:compare.replace(/\/lit\b/g,'/l'),startDate:offerStart,endDate:offerEnd,campaignType:x.member?'LOYALTY':'PUBLIC',redeemLimit:limit?Number(limit[1]):null,redeemLimitLabel:limit?.[0]||'',productURL:flyer.link+x.page+'/',leafletPage:x.page,leafletImageRect:x.imageRect,originalPriceLabel:hg?`${x.price} kr/hg`:'',providerCategory:/buffé|Bamse|Byggsats|Halloween|ljus|skål|hink|form|jacka|leggings|Cozy/.test(x.name)?'其他':null},'/api/citygross-image?'+new URLSearchParams({book,page:String(x.page),v:publication.version}));
  });
  const unique=[...new Map(results.map(x=>[x.potentialPromotions[0].code,x])).values()];
- return {results:unique,leaflet:{title:flyer.title,url:flyer.link,start,end,pageCount:pages.length,parsedProducts:unique.length}};
+ return {results:unique,leaflet:{title:flyer.title,url:flyer.link,start,end,pageCount:pages.length,parsedProducts:unique.length,imageVersion:publication.version}};
+}
+async function cityImageResponse(request,env){
+ if(!['GET','HEAD'].includes(request.method))return new Response('Method not allowed',{status:405});
+ const params=new URL(request.url).searchParams,book=params.get('book'),page=Number(params.get('page')),version=params.get('v');
+ if(!/^\d{1,20}$/.test(book||'')||!Number.isInteger(page)||page<1||page>40||!/^[-\w]{1,64}$/.test(version||''))return new Response('Invalid image',{status:400});
+ const record=await previous(STORES.find(s=>s.key==='citygross'),env);
+ const leaflet=record?.leaflets?.find(x=>x.url==='https://online.flippingbook.com/view/'+book+'/');
+ if(!leaflet?.pageCount||page>leaflet.pageCount||leaflet.imageVersion!==version)return new Response('Unknown leaflet image',{status:404});
+ const key=`images/citygross/${book}/${version}/${page}.svg`;
+ try{
+  const cached=env.BUCKET&&await env.BUCKET.get(key);
+  if(cached)return new Response(request.method==='HEAD'?null:cached.body,{headers:cityImageHeaders});
+  const publication=await loadCityPublication(leaflet.url);if(publication.version!==version)return new Response('Leaflet revised; refresh offers',{status:404});
+  const n=String(page).padStart(4,'0');
+  const [raster,vector]=await Promise.all([fetchCityAsset(publication,publication.root+`common/pages/html5substrates/page${n}_3.webp`,1500000),fetchCityAsset(publication,publication.root+`common/pages/vector/${n}.svg`,1000000)]);
+  const image=composeCityPageImage(raster,new TextDecoder().decode(vector));
+  if(env.BUCKET)await env.BUCKET.put(key,image,{httpMetadata:{contentType:'image/svg+xml'}});
+  return new Response(request.method==='HEAD'?null:image,{headers:cityImageHeaders});
+ }catch{return new Response('Leaflet image temporarily unavailable',{status:502,headers:{'Cache-Control':'no-store'}});}
 }
 export async function fetchOfficialRaw(store){
  if(store.provider==='ica')return parseICA(await sourceText(store.url),store);
