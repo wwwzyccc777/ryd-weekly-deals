@@ -12,6 +12,7 @@ assert.throws(()=>parseICA(icaHTML(f.ica).replace(ica.officialName,'Wrong store'
 const wrongStore=structuredClone(f.ica);wrongStore.forEach(x=>x.stores=x.stores.map(s=>({...s,BMSStoreId:9999})));assert.equal(parseICA(icaHTML(wrongStore),ica).results.length,0);
 assert.equal(parseLidl(lidlHTML(f.lidl)).length,2);
 const common=adaptLidl(f.lidl,lidl);assert.ok(common.results.length>=2);assert.ok(normalize(common,lidl).every(x=>x.image.startsWith('https://www.lidl.se/assets/')));
+const weighed=structuredClone(f.lidl);weighed.forEach(x=>Object.values(x.regionsPrices).forEach(r=>{if(r.currentPrice)r.currentPrice.basePrice={text:'/kg (ca 1 kg)'};if(r.currentLidlPlusPrice?.price)r.currentLidlPlusPrice.price.basePrice={text:'/kg (ca 1 kg)'};}));const weighedItems=normalize(adaptLidl(weighed,lidl),lidl);assert.ok(weighedItems.length);assert.ok(weighedItems.every(x=>x.perKg&&x.comparisonValue===x.price));
 const regional=structuredClone(f.lidl);regional.forEach(x=>Object.values(x.regionsV2)[0].regionPriceId='different');assert.equal(adaptLidl(regional,lidl).results.length,0);
 const varied=structuredClone(f.lidl);varied.forEach(x=>{Object.values(x.regionsPrices).forEach(r=>{if(r.currentPrice)r.currentPrice.variantsHaveDifferentPrices=true;});});assert.ok(normalize(adaptLidl(varied,lidl),lidl).filter(x=>!x.member).every(x=>x.price===null&&x.uncertain));
 const leaflets=normalize(adaptCityFlyers(f.citygross,city),city);assert.equal(leaflets.length,2);assert.equal(leaflets[1].start,'2026-10-12');assert.equal(f.citygross[1].availableFrom.slice(0,10),'2026-10-10');

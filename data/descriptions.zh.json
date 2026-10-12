@@ -180,7 +180,7 @@
   "Fångstzon: se förp. Max 2 köp/hushåll": "捕获区：参见第 14 页。每个家庭最多购买 2 次",
   "Ursprung: Sverige Max 3 förp./hushåll": "产地：瑞典 最多3包/户",
   "Ursprung: se förp. I bit": "出处：见前文。成片",
-  "Ursprung: se förp.": "出处：见前文。",
+  "Ursprung: se förp.": "产地见包装。",
   "Av fläsk Ursprung: se förp.": "来自猪肉 产地：见包装。",
   "Av fläsk Ursprung: Sverige": "猪肉 产地：瑞典",
   "Av nöt Ursprung: se förp.": "牛肉产地：见包装。",
@@ -401,5 +401,12 @@
   "Barebells. 45-55 g. Olika sorter. Jfr. pris 362,73-443,33/kg. Lägsta 30-dgrspris 22,65-25,95/st.": "裸铃。 45-55 克。品种多样。比照。价格362.73-443.33/公斤。 30天最低价22.65-25.95/件。",
   "City Gross. Ca 165 g. Olika sorter. Jfr. pris 151,52/kg. Ord. pris 39,95/st. Priset gäller torsdag - fredag.": "城市毛额。约165克。不同品种。比照。价格151.52/公斤。字。价格39.95/个。该价格适用于周四至周五。",
   "Sammontana Barattolino. 500-800 ml. Djupfryst. Olika sorter. Jfr. pris 47,25/lit.": "萨蒙塔纳·巴拉托利诺。 500-800 毫升。冻结了。不同品种。比照。价格 47.25/升。",
-  "Premier. 3x25 cl. 3-pack i tetrapak. Olika sorter. Jfr. pris 14,67/lit.": "首映。 3x25 厘升3 件装四包包装。不同品种。比照。价格 14.67/升。"
+  "Premier. 3x25 cl. 3-pack i tetrapak. Olika sorter. Jfr. pris 14,67/lit.": "首映。 3x25 厘升3 件装四包包装。不同品种。比照。价格 14.67/升。",
+  "Mörmarinerad Ursprung: se förp. Max 3 förp./hushåll": "嫩化腌制。产地见包装。每户最多3包。",
+  "Eldorado. 1 lit. 95% raps, 5% oliv. Jfr. pris 29,95/lit. Lägsta 30-dgrspris 37,95/st.": "Eldorado。1升。含95%菜籽油、5%橄榄油。单位价29.95克朗/升。过去30天最低价37.95克朗/件。",
+  "Arla ko. 1 kg. Mild lätt 0,5%, Mild 3%, Syrlig 3%. Gäller ej ekologisk, laktosfri.": "Arla Ko。1公斤。温和低脂款0.5%、温和款3%、酸味款3%。不含有机款和无乳糖款。",
+  "Gäller ej ekologiskt": "不适用于有机款。",
+  "Ursprung: se i butik Lösvikt": "产地以门店标识为准。散装称重。",
+  "Vete • Råg": "小麦／黑麦。",
+  "Lagrad 14 mån": "熟成14个月。"
 }

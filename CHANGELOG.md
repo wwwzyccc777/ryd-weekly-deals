@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0 — 2026-10-12
+
+- Translate newly collected names and descriptions with separately aligned response slots, bounded requests and a fallback endpoint.
+- Persist successful translations across weeks and stores, deduplicate concurrent work and retry failed text on subsequent syncs.
+- Preserve reviewed translations, match grocery names without case sensitivity, and correct food terminology.
+- Keep translation failure diagnostics separate from successful retailer collection.
+
 ## 1.3.1 — 2026-10-10
 
 - Display City Gross product areas from the official leaflet, including raster photos and vector artwork.

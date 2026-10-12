@@ -34,7 +34,7 @@ export function adaptLidl(products,store){
    const record=region[key];const p=member?record?.price:record;if(!p||!Number.isFinite(p.price)||p.price<=0)continue;
    const starts=[dayOf(x.storeStartDate),dayOf(p.startDate)].filter(Boolean).sort(),ends=[dayOf(x.storeEndDate),dayOf(p.endDate)].filter(Boolean).sort();
    const start=starts.at(-1)||null,end=ends[0]||null;if(!start||!end||start>end)continue;
-   const description=plain(x.keyfacts.description),compare=p.basePrice?.text||'',perKg=/^\s*\/kg\s*$/i.test(compare),perL=/^\s*\/l\s*$/i.test(compare);
+   const description=plain(x.keyfacts.description),compare=p.basePrice?.text||'',perKg=/^\s*\/kg\b/i.test(compare),perL=/^\s*\/l\b/i.test(compare);
    const uncertain=!!p.variantsHaveDifferentPrices||!!p.discount?.showFrom||!!p.discount?.showUpTo;
    const old=p.discount?.deletedPrice||p.oldPrice,saving=Number.isFinite(old)&&old>p.price?old-p.price:null;
    const size=p.packaging?.text||x.price?.packaging?.text||'';

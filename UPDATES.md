@@ -21,3 +21,11 @@ ICA、Lidl 与原有门店一起同步商品优惠。City Gross Tornby 下载公
 City Gross 商品卡片显示官方宣传册中对应的商品图片区域。服务器按宣传册版本缓存合成图片，临时官方读取签名只在服务器内部使用。新一周同步时同时更新图片来源与裁切位置。
 
 City Gross cards show the corresponding product area from the official leaflet. Composed page images are cached by publication version; temporary publisher read signatures stay server-side. Weekly sync updates image sources and crop positions together.
+
+翻译使用已维护词库优先，其次读取跨周 R2 翻译缓存。新商品名称和说明按独立文本批次翻译，保留对应关系；并发上限为 2，失败时尝试备用端点，下次同步再重试。失败不会缓存成成功；每家门店记录未翻译数量与非敏感错误码。免费翻译端点没有可用性保证，瑞典语原文始终保留。
+
+Reviewed dictionaries take priority over a persistent cross-week R2 translation cache. New names and descriptions use individually aligned text batches, at most two concurrent requests and a fallback endpoint. Failed entries are not cached as successful and are retried on later syncs. Per-store diagnostics report missing fields and non-sensitive error codes. Free translation endpoints have no availability guarantee; Swedish originals remain visible.
+
+即使官网采集处于十分钟冷却期，点击更新仍可补齐缺失翻译；翻译重试单独限制为一分钟一次，与采集共享并发锁，不改写优惠的 fetchedAt。异常批次自动拆小，最终逐条重试。
+
+During the ten-minute retailer cooldown, the sync button can still repair missing translations, limited to once per minute under the shared update lock. Translation repair preserves retailer fetchedAt timestamps. Malformed translation batches split into smaller groups and, when necessary, individual text.

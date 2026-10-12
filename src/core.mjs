@@ -1,3 +1,7 @@
+import {createTranslator,translateItems} from './translations.mjs';
+const nameKey=value=>String(value||'').normalize('NFC').trim().replace(/\s+/g,' ').toLocaleLowerCase('sv-SE');
+const reviewedNames={zh:new Map(Object.entries(ZH).map(([k,v])=>[nameKey(k),v])),en:new Map(Object.entries(EN).map(([k,v])=>[nameKey(k),v]))};
+export const reviewedName=(name,lang)=>reviewedNames[lang]?.get(nameKey(name))||null;
 export const STORES = [
  {id:'4193',key:'ryd',name:'Hemköp Ryd',officialName:'Hemköp Linköping Ryd',host:'https://www.hemkop.se',url:'https://www.hemkop.se/erbjudanden/4193',address:'Mårdtorpsgatan 27'},
  {id:'2298',key:'tornby',name:'Willys Tornby',officialName:'Willys Linköping Tornby',host:'https://www.willys.se',url:'https://www.willys.se/erbjudanden/butik?StoreID=2298',address:'Norra Svedengatan 20'},
@@ -39,7 +43,7 @@ export function normalize(raw,store){
   const discount=saved!==null&&unitPrice>0&&!threshold?Math.round(saved/(unitPrice+saved)*100):null;
   const member=p.campaignType==='LOYALTY'||/klubbpris|plus|medlem/i.test(p.textLabelGenerated+' '+p.textLabel);
   const start=dateISO(p.startDate),end=dateISO(p.endDate);
-  result.push({id:store.key+':'+p.code,kind:p.kind||'product',leafletPage:p.leafletPage||null,leafletImageRect:safeLeafletRect(p.leafletImageRect),originalPriceLabel:p.originalPriceLabel||'',currentListing:!!p.currentListing,productCode:p.mainProductCode||null,store:store.key,name,zh:ZH[name]||null,en:EN[name]||null,descriptionEn:EN_DESCRIPTION[description]||p.descriptionEn||null,translation:ZH[name]?'词库':'待翻译',translationEn:EN[name]?'reviewed':'missing',brand:x.manufacturer||(p.brands||[]).join(', '),size:p.weightVolume||x.displayVolume||'',description,descriptionZh,category:p.providerCategory||category(name,x.googleAnalyticsCategory),price,unitPrice,quantity,perKg,uncertain,threshold,reference,discount,savings:rawSave,discountBasis:p.savingsBasis||'stated',compare,basis,comparisonValue,range,member,limit:p.redeemLimit??p.promotionRedeemLimit??null,limitText:p.redeemLimitLabel||'',condition:p.conditionLabel||'',label,start,end,active:!!end&&end>=today()&&(start?start<=today():!!p.currentListing),image:safeImage(x.image?.url),source:store.url,url:p.productURL|| (p.mainProductCode?store.host+'/produkt/'+p.mainProductCode:store.url),deposit:/pant/i.test(compare+' '+label),frozen:/djupfryst|fryst/i.test(name+" "+description),mix:!!p.realMixAndMatch});
+  result.push({id:store.key+':'+p.code,kind:p.kind||'product',leafletPage:p.leafletPage||null,leafletImageRect:safeLeafletRect(p.leafletImageRect),originalPriceLabel:p.originalPriceLabel||'',currentListing:!!p.currentListing,productCode:p.mainProductCode||null,store:store.key,name,zh:reviewedName(name,'zh')||null,en:reviewedName(name,'en')||null,descriptionEn:EN_DESCRIPTION[description]||p.descriptionEn||null,translation:reviewedName(name,'zh')?'词库':'待翻译',translationEn:reviewedName(name,'en')?'reviewed':'missing',brand:x.manufacturer||(p.brands||[]).join(', '),size:p.weightVolume||x.displayVolume||'',description,descriptionZh,category:p.providerCategory||category(name,x.googleAnalyticsCategory),price,unitPrice,quantity,perKg,uncertain,threshold,reference,discount,savings:rawSave,discountBasis:p.savingsBasis||'stated',compare,basis,comparisonValue,range,member,limit:p.redeemLimit??p.promotionRedeemLimit??null,limitText:p.redeemLimitLabel||'',condition:p.conditionLabel||'',label,start,end,active:!!end&&end>=today()&&(start?start<=today():!!p.currentListing),image:safeImage(x.image?.url),source:store.url,url:p.productURL|| (p.mainProductCode?store.host+'/produkt/'+p.mainProductCode:store.url),deposit:/pant/i.test(compare+' '+label),frozen:/djupfryst|fryst/i.test(name+" "+description),mix:!!p.realMixAndMatch});
  }
  return [...new Map(result.map(x=>[x.id,x])).values()];
 }
@@ -74,39 +78,31 @@ export function assess(x){
  return {score,reasons,recommended:score>=50};
 }
 async function getJSON(url){const source=new URL(url);const headers={Accept:'application/json','User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36','Accept-Language':'sv-SE,sv;q=0.9,en;q=0.8'};if(/(hemkop|willys)\.se$/.test(source.hostname))headers.Referer=source.origin+'/erbjudanden';const r=await fetch(url,{headers,signal:AbortSignal.timeout(18000)});if(!r.ok)throw Error('来源返回 HTTP '+r.status);return r.json();}
-export async function translateUnknown(items){
- items=await translateLanguage(items,'en','en','descriptionEn','translationEn');
- const unknown=[...new Set(items.flatMap(x=>[...(!x.zh?[x.name]:[]),...(x.description&&!x.descriptionZh?[x.description]:[])]))];const translations=new Map();
- for(let i=0;i<unknown.length;i+=28){const batch=unknown.slice(i,i+28);try{const d=await getJSON('https://translate.googleapis.com/translate_a/single?'+new URLSearchParams({client:'gtx',sl:'sv',tl:'zh-CN',dt:'t',q:batch.join('\n')}));const lines=d[0].map(x=>x[0]).join('').split('\n').map(x=>x.trim());if(lines.length===batch.length)batch.forEach((x,j)=>{if(/[\u3400-\u9fff]/.test(lines[j]))translations.set(x,lines[j]);});}catch{}}
- return items.map(x=>({...x,zh:x.zh||translations.get(x.name)||null,descriptionZh:x.descriptionZh||translations.get(x.description)||null,translation:x.zh?'词库':translations.has(x.name)?'机器翻译':'翻译暂不可用'}));
-}
+export async function translateUnknown(items,translator){return translateItems(items,translator);}
 export function safeLeafletRect(r){return r&&['x','y','w','h'].every(k=>typeof r[k]==='number'&&Number.isFinite(r[k]))&&r.x>=0&&r.y>=0&&r.w>0&&r.h>0&&r.x+r.w<=823&&r.y+r.h<=1134?{x:r.x,y:r.y,w:r.w,h:r.h}:null;}
 export function safeImage(value){if(/^\/api\/citygross-image\?book=\d{1,20}&page=\d{1,2}&v=[\w-]{1,64}$/.test(String(value||'')))return value;try{const u=new URL(value);return u.protocol==='https:'&&(u.hostname==='assets.axfood.se'||u.hostname==='assets.icanet.se'||u.hostname==='www.lidl.se'&&u.pathname.startsWith('/assets/')||u.hostname==='res.cloudinary.com'&&/^\/(willys-eu|hemkop-eu)\/image\/upload\//.test(u.pathname))?u.href:'';}catch{return '';}}
-async function translateLanguage(items,lang,nameField,descField,statusField){
- const unknown=[...new Set(items.flatMap(x=>[...(!x[nameField]?[x.name]:[]),...(x.description&&!x[descField]?[x.description]:[])]))];const translated=new Map();
- for(let i=0;i<unknown.length;i+=28){const batch=unknown.slice(i,i+28);try{const d=await getJSON('https://translate.googleapis.com/translate_a/single?'+new URLSearchParams({client:'gtx',sl:'sv',tl:lang,dt:'t',q:batch.join('\n')}));const lines=d[0].map(x=>x[0]).join('').split('\n').map(x=>x.trim());if(lines.length===batch.length)batch.forEach((x,j)=>{if(lines[j])translated.set(x,lines[j]);});}catch{}}
- return items.map(x=>({...x,[nameField]:x[nameField]||translated.get(x.name)||null,[descField]:x[descField]||translated.get(x.description)||null,[statusField]:x[nameField]?'reviewed':translated.has(x.name)?'machine':'missing'}));
-}
 const memory=new Map();const MAX_AGE=6*60*60*1000;
 async function previous(store,env){
  if(env.BUCKET){try{const obj=await env.BUCKET.get('stores/'+store.id+'.json');if(obj)return await obj.json();}catch{}}
  return memory.get(store.id)||SEED.find(x=>x.store.id===store.id);
 }
-async function fetchStore(store,env,force=false){
+async function fetchStore(store,env,force=false,translator=createTranslator(env)){
  const old=await previous(store,env);
  if(!force&&old&&Date.now()-Date.parse(old.fetchedAt)<MAX_AGE)return {...old,status:'cached',error:null};
  try{
   const raw=await fetchOfficialRaw(store);if(!raw.results?.length)throw Error('来源没有返回优惠，保留上次结果');
   const knownNames=new Map((old?.items||[]).map(x=>[x.name,x])),knownDescriptions=new Map((old?.items||[]).map(x=>[x.description,x]));
-  const items=await translateUnknown(normalize(raw,store).map(x=>{const n=knownNames.get(x.name),d=knownDescriptions.get(x.description);return {...x,zh:x.zh||n?.zh,en:x.en||n?.en,descriptionZh:x.descriptionZh||d?.descriptionZh,descriptionEn:x.descriptionEn||d?.descriptionEn};}));
-  const data={store,items,leaflets:raw.leaflets||[],sourcePages:raw.sourcePages||null,fetchedAt:new Date().toISOString(),status:'live',error:null};
+  const items=await translateUnknown(normalize(raw,store).map(x=>{const n=knownNames.get(x.name),d=knownDescriptions.get(x.description);return {...x,zh:x.zh||n?.zh,en:x.en||n?.en,descriptionZh:x.descriptionZh||d?.descriptionZh,descriptionEn:x.descriptionEn||d?.descriptionEn};}),translator);
+  const data={store,items,leaflets:raw.leaflets||[],sourcePages:raw.sourcePages||null,fetchedAt:new Date().toISOString(),status:'live',error:null,translationDiagnostics:{missingNamesZh:items.filter(x=>!x.zh).length,missingNamesEn:items.filter(x=>!x.en).length,missingDescriptionsZh:items.filter(x=>x.description&&!x.descriptionZh).length,missingDescriptionsEn:items.filter(x=>x.description&&!x.descriptionEn).length,errors:translator.errors.slice(-5)}};
   if(env.BUCKET)await env.BUCKET.put('stores/'+store.id+'.json',JSON.stringify(data),{httpMetadata:{contentType:'application/json'}});
   memory.set(store.id,data);return data;
  }catch(e){return {store,items:old?.items||[],leaflets:old?.leaflets||[],sourcePages:old?.sourcePages||null,fetchedAt:old?.fetchedAt||null,status:'failed',error:String(e.message||e)};}
 }
 export async function collect(env={},force=false){
- const stores=await Promise.all(STORES.map(async s=>env.BUCKET?(await previous(s,env)||{store:s,items:[],fetchedAt:null,status:'failed',error:'尚未同步'}):fetchStore(s,env,force)));
- for(const s of stores){s.store=STORES.find(x=>x.id===s.store.id)||s.store;s.items=s.items.map(x=>{const active=!!x.end&&x.end>=today()&&(x.start?x.start<=today():!!x.currentListing);return {...x,zh:ZH[x.name]||x.zh,en:EN[x.name]||x.en,descriptionZh:ZH_DESCRIPTION[x.description]||x.descriptionZh,descriptionEn:EN_DESCRIPTION[x.description]||x.descriptionEn,image:safeImage(x.image),active,...assess({...x,active})};});s.activeCount=s.items.filter(x=>x.active).length;s.stale=!s.fetchedAt||Date.now()-Date.parse(s.fetchedAt)>5*24*60*60*1000;s.translationMissing=s.items.filter(x=>!x.zh).length;s.translationMissingEn=s.items.filter(x=>!x.en).length;}
+ const translator=createTranslator(env);
+ const stores=await Promise.all(STORES.map(async s=>env.BUCKET?(await previous(s,env)||{store:s,items:[],fetchedAt:null,status:'failed',error:'尚未同步'}):fetchStore(s,env,force,translator)));
+ await translator.save();
+ for(const s of stores){s.store=STORES.find(x=>x.id===s.store.id)||s.store;s.items=s.items.map(x=>{const active=!!x.end&&x.end>=today()&&(x.start?x.start<=today():!!x.currentListing);return {...x,zh:reviewedName(x.name,'zh')||x.zh,en:reviewedName(x.name,'en')||x.en,descriptionZh:ZH_DESCRIPTION[x.description]||x.descriptionZh,descriptionEn:EN_DESCRIPTION[x.description]||x.descriptionEn,image:safeImage(x.image),active,...assess({...x,active})};});s.activeCount=s.items.filter(x=>x.active).length;s.stale=!s.fetchedAt||Date.now()-Date.parse(s.fetchedAt)>5*24*60*60*1000;s.translationMissing=s.items.filter(x=>!x.zh).length;s.translationMissingEn=s.items.filter(x=>!x.en).length;}
  return {stores,checkedAt:new Date().toISOString(),today:today(),storage:env.BUCKET?'persistent':'memory',rules:TARGETS.map(x=>({label:x[4],basis:x[1],threshold:x[2]}))};
 }
 export default {async fetch(request,env={},ctx){
@@ -130,7 +126,7 @@ export default {async fetch(request,env={},ctx){
     const stamp=Date.parse(record.fetchedAt);if(!Number.isFinite(stamp)||Math.abs(Date.now()-stamp)>20*60*1000)throw Error('抓取时间不正确');
     const translated=new Map((record.translated||[]).map(x=>[x.id,x]));
     const items=normalize(record.raw,store).map(x=>{const t=translated.get(x.id);return {...x,zh:x.zh||(typeof t?.zh==='string'?t.zh.slice(0,300):null),en:x.en||(typeof t?.en==='string'?t.en.slice(0,300):null),descriptionZh:x.descriptionZh||(typeof t?.descriptionZh==='string'?t.descriptionZh.slice(0,1000):null),descriptionEn:x.descriptionEn||(typeof t?.descriptionEn==='string'?t.descriptionEn.slice(0,1000):null),translation:x.zh?'词库':t?.zh?'机器翻译':'翻译暂不可用',translationEn:x.en?'reviewed':t?.en?'machine':'missing'};});
-    const data={store,items,leaflets:record.raw.leaflets||[],sourcePages:record.raw.sourcePages||null,fetchedAt:record.fetchedAt,status:'live',error:null};
+    const data={store,items,leaflets:record.raw.leaflets||[],sourcePages:record.raw.sourcePages||null,fetchedAt:record.fetchedAt,status:'live',error:null,translationDiagnostics:{missingNamesZh:items.filter(x=>!x.zh).length,missingNamesEn:items.filter(x=>!x.en).length,missingDescriptionsZh:items.filter(x=>x.description&&!x.descriptionZh).length,missingDescriptionsEn:items.filter(x=>x.description&&!x.descriptionEn).length,errors:[]}};
     await env.BUCKET.put('stores/'+store.id+'.json',JSON.stringify(data),{httpMetadata:{contentType:'application/json'}});memory.set(store.id,data);
    }
    return Response.json(await collect(env),{headers:{'Cache-Control':'no-store'}});

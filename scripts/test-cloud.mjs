@@ -4,8 +4,9 @@ import worker,{STORES,today} from '../worker/index.js';
 import {icaHTML,lidlHTML} from './test-providers.mjs';
 const f=JSON.parse(readFileSync(new URL('./fixtures/providers.json',import.meta.url),'utf8'));
 const objects=new Map();let serial=0,sourceFetches=0;const env={BUCKET:{get:async key=>objects.has(key)?{etag:objects.get(key).etag,body:objects.get(key).value,json:async()=>JSON.parse(objects.get(key).value)}:null,put:async(key,value,options={})=>{const old=objects.get(key);if(options.onlyIf instanceof Headers&&options.onlyIf.get('If-None-Match')==='*'&&old)return null;if(options.onlyIf?.etagMatches&&old?.etag!==options.onlyIf.etagMatches)return null;const next={value,etag:String(++serial)};objects.set(key,next);return next;},delete:async key=>objects.delete(key)}};
-const realFetch=globalThis.fetch;let breakICA=false;
+const realFetch=globalThis.fetch;let breakICA=false,translationFetches=0;
 globalThis.fetch=async(url,options)=>{
+ if(new URL(url).pathname==='/translate_a/t'){translationFetches++;const lang=new URL(url).searchParams.get('tl');return Response.json(new URLSearchParams(options.body).getAll('q').map(t=>(lang==='en'?'Translated ':'翻译 ')+t));}
  sourceFetches++;assert.ok(options.headers['User-Agent']);const u=new URL(url);
  if(u.hostname==='www.ica.se')return new Response(breakICA?'unavailable':icaHTML(f.ica),{status:breakICA?503:200});
  if(u.hostname==='www.lidl.se'){
@@ -40,6 +41,9 @@ try{
  assert.equal((await worker.fetch(new Request('https://example.test/api/update',{method:'POST',headers:{Origin:'https://evil.example'}}),env)).status,403);
  assert.equal((await worker.fetch(new Request('https://example.test/api/import',{method:'POST',body:'{}'}),env)).status,401);
  const status=await (await worker.fetch(new Request('https://example.test/api/update'),env)).json();assert.equal(status.job.state,'succeeded');assert.equal(status.mode,'cloud');
+ const repairKey='stores/'+STORES[0].id+'.json',record=JSON.parse(objects.get(repairKey).value),stamp=record.fetchedAt;record.items[0]={...record.items[0],name:'Never seen this week',zh:null,en:null,description:'New conditions',descriptionZh:null,descriptionEn:null};objects.set(repairKey,{value:JSON.stringify(record),etag:String(++serial)});
+ const beforeRepair=sourceFetches,repaired=await(await worker.fetch(req(),env)).json();assert.equal(repaired.translationRepair.filled,4);assert.equal(repaired.translationRepair.remaining,0);assert.equal(sourceFetches,beforeRepair);assert.equal(translationFetches,2);assert.equal(repaired.data.stores[0].fetchedAt,stamp);assert.equal(repaired.data.stores[0].translationMissing,0);
+ assert.ok((await(await worker.fetch(req(),env)).json()).reused);assert.equal(translationFetches,2);
  // Expire the previous check and exercise failed-source retention rather than empty replacement.
  const job=JSON.parse(objects.get('updates/current.json').value);job.requestedAt=new Date(Date.now()-11*60*1000).toISOString();objects.set('updates/current.json',{value:JSON.stringify(job),etag:String(++serial)});breakICA=true;
  const failed=await (await worker.fetch(req(),env)).json();assert.equal(failed.job.state,'failed');const ica=failed.data.stores.find(s=>s.store.key==='ica');assert.equal(ica.status,'failed');assert.equal(ica.items.length,3);assert.ok(failed.data.stores.filter(s=>s.store.key!=='ica').every(s=>s.status==='live'));
