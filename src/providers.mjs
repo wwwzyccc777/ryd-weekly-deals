@@ -92,7 +92,17 @@ async function cityImageResponse(request,env){
  }catch{return new Response('Leaflet image temporarily unavailable',{status:502,headers:{'Cache-Control':'no-store'}});}
 }
 export async function fetchOfficialRaw(store){
- if(store.provider==='ica')return parseICA(await sourceText(store.url),store);
+ if(store.provider==='ica'){
+  // The public website uses BMS 8900, not the account number 1003823.
+  // Its anonymous token stays server-side and is never persisted.
+  try{
+   const token=await sourceJSON(store.host+'/e11/public-access-token');
+   if(token.isAnonymous!==true||typeof token.publicAccessToken!=='string')throw Error('ICA anonymous token unavailable');
+   const offers=await sourceJSON('https://apim-pub.gw.ica.se/sverige/digx/offerreader/v1/offers/store/8900',{Authorization:'Bearer '+token.publicAccessToken});
+   if(!Array.isArray(offers)||!offers.length||!offers.every(x=>x.stores?.some(s=>String(s.BMSStoreId)==='8900'&&s.storeMarketingName===store.officialName)))throw Error('ICA store offers identity mismatch');
+   return parseICA('<script>window.__INITIAL_DATA__ = '+JSON.stringify({generic:{headerData:{store:{name:store.officialName,accountNumber:store.id}}},offers:{weeklyOffers:offers}})+'</script>',store);
+  }catch{return parseICA(await sourceText(store.url),store);}
+ }
  if(store.provider==='lidl'){
   const [home,identity]=await Promise.all([sourceText(store.host+'/'),sourceText(store.identityURL)]);
   if(!identity.includes('Järdalavägen 1')||!identity.includes('Linköping'))throw Error('Lidl 门店身份不匹配');
@@ -104,7 +114,7 @@ export async function fetchOfficialRaw(store){
   const stores=await sourceJSON(store.host+'/api/v1/PageData/stores');const identity=stores.find(x=>x.data?.siteId===168)?.data;
   if(identity?.storeName!=='Linköping Tornby'||identity.id!==9097)throw Error('City Gross 门店身份不匹配');
   const number=await sourceJSON(store.host+'/api/v1/sites/168/storeNumber');if(number.storeNumber!==3231)throw Error('City Gross 店号已变化');
-  const flyers=(await sourceJSON(store.host+'/api/v1/leaflets?store=3231')).filter(x=>String(x.store)==='3231'&&/^https:\/\/online\.flippingbook\.com\/view\/\d+\/?$/.test(x.link));
+  const flyers=(await sourceJSON(store.host+'/api/v1/leaflets?store=3231')).filter(x=>String(x.store)==='3231'&&/^https:\/\/online\.flippingbook\.com\/view\/\d+\/?$/.test(x.link)).map(x=>({...x,link:x.link.replace(/\/?$/,'/')}));
   const leaflets=flyers.map(x=>({...parseFlyerDates(x.subTitle,String(x.availableFrom).slice(0,4)),title:x.title,url:x.link}));
   const current=flyers.filter(x=>{const d=parseFlyerDates(x.subTitle,String(x.availableFrom).slice(0,4));return d.start&&d.start<=today()&&d.end>=today();});
   if(!current.length)throw Error('City Gross 没有当前有效的宣传册');

@@ -8,6 +8,8 @@ const realFetch=globalThis.fetch;let breakICA=false,translationFetches=0;
 globalThis.fetch=async(url,options)=>{
  if(new URL(url).pathname==='/translate_a/t'){translationFetches++;const lang=new URL(url).searchParams.get('tl');return Response.json(new URLSearchParams(options.body).getAll('q').map(t=>(lang==='en'?'Translated ':'翻译 ')+t));}
  sourceFetches++;assert.ok(options.headers['User-Agent']);const u=new URL(url);
+ if(u.hostname==='www.ica.se'&&u.pathname==='/e11/public-access-token')return Response.json({isAnonymous:true,publicAccessToken:'anonymous-fixture'});
+ if(u.hostname==='apim-pub.gw.ica.se'){assert.equal(u.pathname,'/sverige/digx/offerreader/v1/offers/store/8900');assert.equal(options.headers.Authorization,'Bearer anonymous-fixture');return breakICA?new Response('unavailable',{status:503}):Response.json(f.ica);}
  if(u.hostname==='www.ica.se')return new Response(breakICA?'unavailable':icaHTML(f.ica),{status:breakICA?503:200});
  if(u.hostname==='www.lidl.se'){
   if(u.pathname==='/'){const [year,month,day]=today().split('-');return new Response(`<a href="/c/current/a123">${Number(day)}/${Number(month)}-${Number(day)}/${Number(month)}</a>`);}

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.1 — 2026-10-31
+
+- Use ICA's public anonymous offer API with verified BMS store identity and keep the public HTML fallback.
+- Normalize City Gross leaflet URLs and renew expired public resource policies once before retaining previous data.
+
+
 ## 1.4.0 — 2026-10-12
 
 - Translate newly collected names and descriptions with separately aligned response slots, bounded requests and a fallback endpoint.

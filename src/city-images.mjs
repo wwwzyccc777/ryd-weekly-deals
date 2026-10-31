@@ -8,16 +8,21 @@ export async function loadCityPublication(url){
   const html=await r.text(),root=html.match(/\bContentRoot:\s*'([^']+)'/)?.[1],privateRoot=html.match(/PrivateContentRoot:\s*'([^']+)'/)?.[1];
   const m=html.match(/(?:var|let|const) initialPolicies\s*=\s*([\s\S]*?);/);
   if(!root||!privateRoot||!m||![root,privateRoot].every(u=>/^https:\/\/d[\w]+\.cloudfront\.net\/[\w/-]+\/$/.test(u)))throw Error('宣传册公开资源格式已变化');
-  return {root,privateRoot,version:root.split('/').at(-2),policies:JSON.parse(m[1])};
+  return {url,root,privateRoot,version:root.split('/').at(-2),policies:JSON.parse(m[1])};
  })();
  publications.set(url,{at:Date.now(),promise});if(publications.size>8)publications.delete(publications.keys().next().value);
  try{return await promise;}catch(e){publications.delete(url);throw e;}
 }
-export async function fetchCityAsset(publication,url,maxBytes){
+export async function fetchCityAsset(publication,url,maxBytes,refreshed=false){
  if(![publication.root,publication.privateRoot].some(root=>url.startsWith(root)))throw Error('宣传册资源地址无效');
  const policy=publication.policies.find(p=>url.replace(/^https?/,'').startsWith(p.PathPrefix));if(!policy)throw Error('宣传册公开资源不可用');
  // The anonymous publisher supplies expiring read policies. Keep them server-side.
  const r=await fetch(url+'?'+new URLSearchParams({Policy:policy.Policy,Signature:policy.Signature,'Key-Pair-Id':policy.KeyId}),{headers:publicHeaders,signal:AbortSignal.timeout(30000)});
+ if(r.status===403&&!refreshed&&publication.url){
+  publications.delete(publication.url);const fresh=await loadCityPublication(publication.url);
+  if(fresh.version!==publication.version)throw Error('宣传册刚刚更新，请重新同步');
+  return fetchCityAsset(fresh,url,maxBytes,true);
+ }
  if(!r.ok)throw Error('宣传册资源 HTTP '+r.status);
  const bytes=new Uint8Array(await r.arrayBuffer());if(bytes.length>maxBytes)throw Error('宣传册资源大小异常');return bytes;
 }
