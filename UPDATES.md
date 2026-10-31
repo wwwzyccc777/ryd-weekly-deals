@@ -29,3 +29,7 @@ Reviewed dictionaries take priority over a persistent cross-week R2 translation 
 即使官网采集处于十分钟冷却期，点击更新仍可补齐缺失翻译；翻译重试单独限制为一分钟一次，与采集共享并发锁，不改写优惠的 fetchedAt。异常批次自动拆小，最终逐条重试。
 
 During the ten-minute retailer cooldown, the sync button can still repair missing translations, limited to once per minute under the shared update lock. Translation repair preserves retailer fetchedAt timestamps. Malformed translation batches split into smaller groups and, when necessary, individual text.
+
+2026-10-31：ICA 当前拒绝网站托管环境及 GitHub 标准运行器的请求（HTTP 403）。官网公开 API 的本机采集已验证正常。维护者可双击 Update-offers.cmd，使用既有本机 DPAPI 签名密钥采集、复用已保存翻译并更新公开网站；不需要与助手对话。该密钥不在公开源码中。ICA 云端直连问题仍未解除。
+
+ICA currently rejects requests from the site host and GitHub standard runners (HTTP 403). The public API works from the maintainer's computer. Update-offers.cmd uses the existing local DPAPI signing key to collect, reuse saved translations and update the public site without a chat. The key is never included in public source. ICA direct cloud collection remains unavailable.

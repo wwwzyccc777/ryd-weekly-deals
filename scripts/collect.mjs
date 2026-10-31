@@ -1,8 +1,10 @@
 import {STORES,normalize,translateUnknown,fetchOfficialRaw} from '../worker/index.js';
 import {signingHeaders} from './update-auth.mjs';
 export async function collectAndSync(url){
+const previous=await(await fetch(new URL(url).origin+'/api/deals')).json();
+const knownNames=new Map(previous.stores.flatMap(s=>s.items).map(x=>[x.name,x])),knownDescriptions=new Map(previous.stores.flatMap(s=>s.items).map(x=>[x.description,x]));
 const stores=await Promise.all(STORES.map(async store=>{try{
- const raw=await fetchOfficialRaw(store);if(!raw.results?.length)throw Error("没有获取到优惠");const translated=(await translateUnknown(normalize(raw,store))).map(x=>({id:x.id,zh:x.zh,en:x.en,descriptionZh:x.descriptionZh,descriptionEn:x.descriptionEn}));
+ const raw=await fetchOfficialRaw(store);if(!raw.results?.length)throw Error("没有获取到优惠");const translated=(await translateUnknown(normalize(raw,store).map(x=>({...x,zh:x.zh||knownNames.get(x.name)?.zh,en:x.en||knownNames.get(x.name)?.en,descriptionZh:x.descriptionZh||knownDescriptions.get(x.description)?.descriptionZh,descriptionEn:x.descriptionEn||knownDescriptions.get(x.description)?.descriptionEn})))).map(x=>({id:x.id,zh:x.zh,en:x.en,descriptionZh:x.descriptionZh,descriptionEn:x.descriptionEn}));
  return {id:store.id,identity:{storeId:store.id,name:store.officialName},raw,translated,fetchedAt:new Date().toISOString()};
  }catch(e){return {id:store.id,error:store.name+' 抓取失败：'+e.message};}}));
 const origin=new URL(url).origin;
