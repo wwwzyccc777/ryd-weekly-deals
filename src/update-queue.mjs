@@ -1,10 +1,16 @@
 // Visitors can ask the server to fetch fixed official sources, never upload data.
 const UPDATE_COOLDOWN=10*60*1000;
+const UPDATE_LEASE=5*60*1000;
 const json=(x,status=200)=>Response.json(x,{status,headers:{'Cache-Control':'no-store'}});
 async function readObject(env,key){const o=await env.BUCKET.get(key);return o?o.json():null;}
 async function writeObject(env,key,value){await env.BUCKET.put(key,JSON.stringify(value),{httpMetadata:{contentType:'application/json'}});}
 export async function updateStatus(env){
- const job=await readObject(env,'updates/current.json');
+ const saved=await readObject(env,'updates/current.json');
+ const expiresAt=Date.parse(saved?.startedAt)+UPDATE_LEASE;
+ // A killed Worker may never reach its catch/finally. Derive the status
+ // without writing over a newer job or extending the source cooldown.
+ const job=saved?.state==='processing'&&Date.now()>=expiresAt
+  ?{...saved,state:'timed_out',completedAt:new Date(expiresAt).toISOString()}:saved;
  return {job,mode:'cloud',cooldownSeconds:job?.requestedAt?Math.max(0,Math.ceil((Date.parse(job.requestedAt)+UPDATE_COOLDOWN-Date.now())/1000)):0};
 }
 export async function publicUpdate(request,env){
@@ -18,14 +24,14 @@ export async function publicUpdate(request,env){
  if(request.method!=='POST')return json({error:'Method not allowed'},405);
  const origin=request.headers.get('Origin');if(origin&&origin!==new URL(request.url).origin)return json({error:'Origin not allowed'},403);
  const status=await updateStatus(env),job=status.job;
- if(job&&job.state==='processing'&&Date.now()-Date.parse(job.startedAt)<5*60*1000)return json({...status,reused:true});
+ if(job?.state==='processing')return json({...status,reused:true});
  if(status.cooldownSeconds>0){
   const data=await collect(env);
   const translationRepair=await repairTranslations(env,data);
   return json({...status,reused:true,translationRepair,data:translationRepair?await collect(env):data});
  }
  const lockKey='updates/lock.json',oldLock=await env.BUCKET.get(lockKey);
- if(oldLock){const existing=await oldLock.json();if(Date.now()-existing.time<5*60*1000)return json({...await updateStatus(env),reused:true});}
+ if(oldLock){const existing=await oldLock.json();if(Date.now()-existing.time<UPDATE_LEASE)return json({...await updateStatus(env),reused:true});}
  const lock=await env.BUCKET.put(lockKey,JSON.stringify({time:Date.now()}),{onlyIf:oldLock?{etagMatches:oldLock.etag}:new Headers({'If-None-Match':'*'})});
  if(!lock)return json({...await updateStatus(env),reused:true});
  const next={id:crypto.randomUUID(),state:'processing',requestedAt:new Date().toISOString(),startedAt:new Date().toISOString(),completedAt:null,error:null,changed:null};
