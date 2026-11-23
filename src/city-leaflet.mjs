@@ -49,21 +49,33 @@ export function coveredTextIDs(operators,width,height){
  }
  return covered;
 }
-export async function cityPDFPages(bytes){
+export async function cityPDFPages(bytes,{expectedStart}={}){
  const pdf=await getDocumentProxy(bytes,{isEvalSupported:false,verbosity:0});const pages=[];
+ let currentFlattenedEdition=false;
  try{
   if(pdf.numPages>40)throw Error('宣传册页数异常');
   for(let page=1;page<=pdf.numPages;page++){
    const p=await pdf.getPage(page),v=p.getViewport({scale:1});
    const [content,operators]=await Promise.all([p.getTextContent({includeMarkedContent:true}),p.getOperatorList()]);
    const covered=coveredTextIDs(operators,v.width,v.height),marks=[],items=[];
+   // Some current editions paint a flattened copy over their own tagged
+   // text. Keep that text only when its covered validity header identifies
+   // the requested edition; older covered layouts remain excluded.
+   if(page===1&&expectedStart){
+    const [,month,day]=expectedStart.split('-').map(Number);let hidden=false;
+    const hiddenText=[];
+    for(const t of content.items){if(t.type==='beginMarkedContentProps')hidden=covered.has(Number(t.id?.match(/_mc(\d+)$/)?.[1]));else if(t.type==='endMarkedContent')hidden=false;else if(hidden&&t.str)hiddenText.push(t.str);}
+    const date=new RegExp('Priserna\\s+gäller[^\\n]{0,100}\\b'+day+'\\s*/\\s*'+month+'\\b','i');
+    currentFlattenedEdition=date.test(hiddenText.join(' '));
+   }
    for(const t of content.items){
     if(t.type==='beginMarkedContentProps'||t.type==='beginMarkedContent'){marks.push(t.id?Number(t.id.match(/_mc(\d+)$/)?.[1]):null);continue;}
     if(t.type==='endMarkedContent'){marks.pop();continue;}
-    if(!t.str?.trim()||marks.some(id=>covered.has(id)))continue;
+    if(!t.str?.trim()||!currentFlattenedEdition&&marks.some(id=>covered.has(id)))continue;
     items.push({text:t.str.trim(),x:t.transform[4]/v.width*822,y:(v.height-t.transform[5])/v.height*1133,w:t.width/v.width*822,h:t.height/v.height*1133,font:t.fontName});
    }
    pages.push({page,items,images:pageImageRects(operators,v.width,v.height)});
+   p.cleanup();
   }
  }finally{await pdf.loadingTask.destroy();}
  return pages;

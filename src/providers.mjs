@@ -48,9 +48,9 @@ export function adaptCityFlyers(flyers,store){if(!Array.isArray(flyers)||!flyers
 async function fetchCityBook(flyer,store){
  const {start,end}=parseFlyerDates(flyer.subTitle,String(flyer.availableFrom).slice(0,4));
  const publication=await loadCityPublication(flyer.link);
- const bytes=await fetchCityAsset(publication,publication.privateRoot+'common/downloads/publication.pdf',20000000);
- if(bytes.length>20000000||!new TextDecoder().decode(bytes.slice(0,5)).startsWith('%PDF'))throw Error('宣传册 PDF 格式异常');
- const pages=await cityPDFPages(bytes),offers=cityPageProducts(pages),book=flyer.link.match(/\/view\/(\d+)/)[1];
+ const bytes=await fetchCityAsset(publication,publication.privateRoot+'common/downloads/publication.pdf',40*1024*1024);
+ if(!new TextDecoder().decode(bytes.slice(0,5)).startsWith('%PDF'))throw Error('宣传册 PDF 格式异常');
+ const pages=await cityPDFPages(bytes,{expectedStart:start}),offers=cityPageProducts(pages),book=flyer.link.match(/\/view\/(\d+)/)[1];
  if(offers.length<10)throw Error('宣传册商品解析不足，保留上次结果');
  const results=offers.map(x=>{
   let offerStart=start,offerEnd=end;
@@ -118,7 +118,7 @@ export async function fetchOfficialRaw(store){
   const leaflets=flyers.map(x=>({...parseFlyerDates(x.subTitle,String(x.availableFrom).slice(0,4)),title:x.title,url:x.link}));
   const current=flyers.filter(x=>{const d=parseFlyerDates(x.subTitle,String(x.availableFrom).slice(0,4));return d.start&&d.start<=today()&&d.end>=today();});
   if(!current.length)throw Error('City Gross 没有当前有效的宣传册');
-  const books=await Promise.all(current.map(x=>fetchCityBook(x,store)));
+  const books=[];for(const flyer of current)books.push(await fetchCityBook(flyer,store));
   return {results:books.flatMap(x=>x.results),leaflets:leaflets.map(x=>({...x,...books.find(b=>b.leaflet.url===x.url)?.leaflet}))};
  }
  const identity=await getJSON(store.host+'/axfood/rest/store/'+store.id);if(identity.name!==store.officialName||String(identity.storeId)!==store.id)throw Error('门店身份验证失败');

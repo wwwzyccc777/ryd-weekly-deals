@@ -24,7 +24,10 @@ export async function fetchCityAsset(publication,url,maxBytes,refreshed=false){
   return fetchCityAsset(fresh,url,maxBytes,true);
  }
  if(!r.ok)throw Error('宣传册资源 HTTP '+r.status);
- const bytes=new Uint8Array(await r.arrayBuffer());if(bytes.length>maxBytes)throw Error('宣传册资源大小异常');return bytes;
+ if(Number(r.headers.get('Content-Length'))>maxBytes){await r.body?.cancel();throw Error('宣传册资源超过大小限制');}
+ const reader=r.body.getReader(),chunks=[];let size=0;
+ try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>maxBytes){await reader.cancel();throw Error('宣传册资源超过大小限制');}chunks.push(value);}}finally{reader.releaseLock();}
+ const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}return bytes;
 }
 export function composeCityPageImage(raster,vector){
  const magic=(start,end)=>String.fromCharCode(...raster.slice(start,end));
