@@ -11,6 +11,12 @@ globalThis.fetch=async(url,options)=>{
  if(u.hostname==='www.ica.se'&&u.pathname==='/e11/public-access-token')return Response.json({isAnonymous:true,publicAccessToken:'anonymous-fixture'});
  if(u.hostname==='apim-pub.gw.ica.se'){assert.equal(u.pathname,'/sverige/digx/offerreader/v1/offers/store/8900');assert.equal(options.headers.Authorization,'Bearer anonymous-fixture');return breakICA?new Response('unavailable',{status:503}):Response.json(f.ica);}
  if(u.hostname==='www.ica.se')return new Response(breakICA?'unavailable':icaHTML(f.ica),{status:breakICA?503:200});
+ if(u.hostname==='api.e-magin.se'){
+  assert.equal(u.pathname,'/api/fusion/def/latestpaper/v3930gt1');
+  const date=new Date(today()+'T00:00:00Z');date.setUTCDate(date.getUTCDate()+4-(date.getUTCDay()||7));
+  const year=date.getUTCFullYear(),week=Math.ceil(((date-Date.UTC(year,0,1))/86400000+1)/7);
+  return Response.json({titles:[{id:'v3930gt1',logoUrl:'https://handlaprivatkund.ica.se/stores/1003823/',papers:[{id:'v3sjm8s6',name:week+'/'+year}]}]});
+ }
  if(u.hostname==='www.lidl.se'){
   if(u.pathname==='/'){const [year,month,day]=today().split('-');return new Response(`<a href="/c/current/a123">${Number(day)}/${Number(month)}-${Number(day)}/${Number(month)}</a>`);}
   if(u.pathname.includes('/butiker/'))return new Response('Lidl Linköping Järdalavägen 1');
@@ -52,5 +58,8 @@ try{
  // Expire the previous check and exercise failed-source retention rather than empty replacement.
  const job=JSON.parse(objects.get('updates/current.json').value);job.requestedAt=new Date(Date.now()-11*60*1000).toISOString();objects.set('updates/current.json',{value:JSON.stringify(job),etag:String(++serial)});breakICA=true;
  const failed=await (await worker.fetch(req(),env)).json();assert.equal(failed.job.state,'failed');const ica=failed.data.stores.find(s=>s.store.key==='ica');assert.equal(ica.status,'failed');assert.equal(ica.items.length,3);assert.ok(failed.data.stores.filter(s=>s.store.key!=='ica').every(s=>s.status==='live'));
+ const savedICA=(await(await worker.fetch(new Request('https://example.test/api/deals'),env)).json()).stores.find(s=>s.store.key==='ica');
+ assert.equal(savedICA.leaflets[0].url,'https://www.e-magin.se/paper/v3sjm8s6/paper/1');
+ assert.equal(savedICA.fetchedAt,first.data.stores.find(s=>s.store.key==='ica').fetchedAt);
  console.log('Six-source cloud sync, persistence, cooldown, cross-origin rejection, signed imports and failed-source retention passed.');
 }finally{globalThis.fetch=realFetch;}

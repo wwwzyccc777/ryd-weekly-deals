@@ -91,6 +91,25 @@ async function cityImageResponse(request,env){
   return new Response(request.method==='HEAD'?null:image,{headers:cityImageHeaders});
  }catch{return new Response('Leaflet image temporarily unavailable',{status:502,headers:{'Cache-Control':'no-store'}});}
 }
+// This edition feed is linked from the official ICA Linköping store page.
+export async function fetchICALeaflet(store, date=today()){
+ const response=await sourceJSON('https://api.e-magin.se/api/fusion/def/latestpaper/v3930gt1');
+ const title=response.titles?.find(t=>t.id==='v3930gt1');
+ const edition=title?.papers?.[0];
+ if(!title||!edition||!/^\w{8}$/.test(edition.id))throw Error('Missing ICA leaflet edition');
+ const shop=new URL(title.logoUrl);
+ if(shop.origin!=='https://handlaprivatkund.ica.se'||shop.pathname!=='/stores/'+store.id+'/')throw Error('ICA leaflet store identity mismatch');
+
+ const monday=new Date(date+'T00:00:00Z');
+ monday.setUTCDate(monday.getUTCDate()-((monday.getUTCDay()+6)%7));
+ const thursday=new Date(monday);thursday.setUTCDate(monday.getUTCDate()+3);
+ const year=thursday.getUTCFullYear();
+ const week=Math.ceil(((thursday-Date.UTC(year,0,1))/86400000+1)/7);
+ if(edition.name!==week+'/'+year)throw Error('ICA leaflet is not from the current week');
+ const sunday=new Date(monday);sunday.setUTCDate(monday.getUTCDate()+6);
+ return {title:'ICA · '+edition.name,url:'https://www.e-magin.se/paper/'+edition.id+'/paper/1',start:monday.toISOString().slice(0,10),end:sunday.toISOString().slice(0,10)};
+}
+
 export async function fetchOfficialRaw(store){
  if(store.provider==='ica'){
   // The public website uses BMS 8900, not the account number 1003823.

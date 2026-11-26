@@ -96,13 +96,23 @@ async function fetchStore(store,env,force=false,translator=createTranslator(env)
   const data={store,items,leaflets:raw.leaflets||[],sourcePages:raw.sourcePages||null,fetchedAt:new Date().toISOString(),status:'live',error:null,translationDiagnostics:{missingNamesZh:items.filter(x=>!x.zh).length,missingNamesEn:items.filter(x=>!x.en).length,missingDescriptionsZh:items.filter(x=>x.description&&!x.descriptionZh).length,missingDescriptionsEn:items.filter(x=>x.description&&!x.descriptionEn).length,errors:translator.errors.slice(-5)}};
   if(env.BUCKET)await env.BUCKET.put('stores/'+store.id+'.json',JSON.stringify(data),{httpMetadata:{contentType:'application/json'}});
   memory.set(store.id,data);return data;
- }catch(e){return {store,items:old?.items||[],leaflets:old?.leaflets||[],sourcePages:old?.sourcePages||null,fetchedAt:old?.fetchedAt||null,status:'failed',error:String(e.message||e)};}
+ }catch(e){
+  let leaflets=old?.leaflets||[];
+  if(store.provider==='ica'){
+   leaflets=leaflets.filter(leaflet=>leaflet.start<=today()&&leaflet.end>=today());
+   try{leaflets=[await fetchICALeaflet(store)];}catch{/* Retain a previously verified current edition. */}
+  }
+  return {store,items:old?.items||[],leaflets,sourcePages:old?.sourcePages||null,fetchedAt:old?.fetchedAt||null,status:'failed',error:String(e.message||e)};
+ }
 }
 export async function collect(env={},force=false){
  const translator=createTranslator(env);
  const stores=await Promise.all(STORES.map(async s=>env.BUCKET?(await previous(s,env)||{store:s,items:[],fetchedAt:null,status:'failed',error:'尚未同步'}):fetchStore(s,env,force,translator)));
  await translator.save();
  for(const s of stores){s.store=STORES.find(x=>x.id===s.store.id)||s.store;s.items=s.items.map(x=>{const active=!!x.end&&x.end>=today()&&(x.start?x.start<=today():!!x.currentListing);return {...x,zh:reviewedName(x.name,'zh')||x.zh,en:reviewedName(x.name,'en')||x.en,descriptionZh:ZH_DESCRIPTION[x.description]||x.descriptionZh,descriptionEn:EN_DESCRIPTION[x.description]||x.descriptionEn,image:safeImage(x.image),active,...assess({...x,active})};});s.activeCount=s.items.filter(x=>x.active).length;s.stale=!s.fetchedAt||Date.now()-Date.parse(s.fetchedAt)>5*24*60*60*1000;s.translationMissing=s.items.filter(x=>!x.zh).length;s.translationMissingEn=s.items.filter(x=>!x.en).length;}
+ for(const s of stores)if(s.store.key==='ica'&&s.status==='failed'){
+  s.leaflets=(s.leaflets||[]).filter(leaflet=>leaflet.start<=today()&&leaflet.end>=today());
+ }
  return {stores,checkedAt:new Date().toISOString(),today:today(),storage:env.BUCKET?'persistent':'memory',rules:TARGETS.map(x=>({label:x[4],basis:x[1],threshold:x[2]}))};
 }
 export default {async fetch(request,env={},ctx){
